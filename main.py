@@ -255,7 +255,7 @@ MEDICATION ADMINISTRATION RECORD (MAR) MEDICATIONS:
 Identify issues in exactly these four categories and return ONLY valid JSON.
 
 DEFINITIONS:
-- "omissions": medications present in one document but absent from the other — check both directions (AVS→MAR and MAR→AVS). For each medication, look up its "name" in the other list. If it is not found there, it is an omission.
+- "omissions": medications present in the AVS but absent from the MAR — check one directions (AVS→MAR and MAR→AVS). For each medication in the AVS, look up its "name" in the MAR list. If it is not found there, it is an omission.
 - "duplications": medications listed MORE THAN ONCE in the SAME document (AVS or MAR)
 - "dosage_discrepancies": medications appearing in BOTH documents but with DIFFERENT doses
 - "incorrect_routes": medications appearing in BOTH documents but with DIFFERENT administration routes (e.g., PO vs IV)
