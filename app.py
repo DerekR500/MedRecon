@@ -50,7 +50,6 @@ def _combine_images(file_list) -> Image.Image | None:
 
 
 MODEL_CHOICES = [
-    "MedGemma (Local)",
     "medgemma-27b-it (UF Navigator)",
     "gemma-3-27b-it (UF Navigator)",
     "mistral-small-3.1 (UF Navigator)",

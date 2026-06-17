@@ -3,8 +3,7 @@ model_adapter.py
 ================
 Unified LLM call interface for the Medication Reconciliation Pipeline.
 
-Supported backends:
-  - MedGemma 1.5 via local Ollama  (http://localhost:11434)
+Supported backend:
   - UF Navigator models via OpenAI-compatible API (https://api.ai.it.ufl.edu/v1)
 """
 
@@ -15,12 +14,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-LOCAL_MODEL_ID = "medgemma1.5:latest"
 _UF_BASE_URL = "https://api.ai.it.ufl.edu/v1"
 
-# Maps Gradio dropdown display names → internal API model IDs
+# Maps dropdown display names → internal API model IDs
 _DISPLAY_TO_ID: dict[str, str] = {
-    "MedGemma (Local)":                      LOCAL_MODEL_ID,
     "medgemma-27b-it (UF Navigator)":        "medgemma-27b-it",
     "gemma-3-27b-it (UF Navigator)":         "gemma-3-27b-it",
     "mistral-small-3.1 (UF Navigator)":      "mistral-small-3.1",
@@ -41,22 +38,7 @@ def call_model(prompt: str, model_name: str, image=None) -> str:
         Raw response string from the model.
     """
     model_id = _DISPLAY_TO_ID.get(model_name, model_name)
-
-    if model_id == LOCAL_MODEL_ID:
-        return _call_ollama(prompt, model_id, image)
-    else:
-        return _call_uf_navigator(prompt, model_id, image)
-
-
-# ── Backend: local Ollama ────────────────────────────────────────────────────
-
-def _call_ollama(prompt: str, model_id: str, image=None) -> str:
-    import ollama as _ollama
-    kwargs: dict = {"model": model_id, "prompt": prompt, "format": "json"}
-    if image is not None:
-        kwargs["images"] = [_to_png_bytes(image)]
-    response = _ollama.generate(**kwargs)
-    return response["response"]
+    return _call_uf_navigator(prompt, model_id, image)
 
 
 # ── Backend: UF Navigator (OpenAI-compatible REST API) ───────────────────────

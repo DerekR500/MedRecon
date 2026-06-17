@@ -27,7 +27,7 @@ from PIL import Image
 from model_adapter import call_model
 
 
-MODEL_NAME = "medgemma1.5:latest"
+MODEL_NAME = "gemma-3-27b-it (UF Navigator)"
 
 
 # ─────────────────────────────────────────────
