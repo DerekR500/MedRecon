@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MedRecon AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'IBM Plex Sans', sans-serif;
+      background: #FFFFFF;
+      color: #000000;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Hero ───────────────────────────────────────────── */
+    #hero {
+      background: #343741;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 48px 24px;
+    }
+
+    .hero-inner h1 {
+      font-size: clamp(2.5rem, 6vw, 4.5rem);
+      font-weight: 600;
+      color: #FFFFFF;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      margin: 0 0 14px;
+    }
+
+    .hero-inner p {
+      font-size: 1.125rem;
+      font-weight: 300;
+      color: #C7C9C8;
+      letter-spacing: 0.01em;
+      margin: 0 0 52px;
+    }
+
+    .btn-hero {
+      background: #FFFFFF;
+      color: #000000;
+      border: none;
+      padding: 15px 40px;
+      font-family: inherit;
+      font-size: 0.875rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-hero:hover { background: #D8D4D7; }
+
+    /* ── Upload ─────────────────────────────────────────── */
+    #upload {
+      background: #FFFFFF;
+      padding: 100px 24px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .upload-wrap {
+      width: 100%;
+      max-width: 560px;
+    }
+
+    .section-eyebrow {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #C7C9C8;
+      margin: 0 0 40px;
+    }
+
+    .field + .field { margin-top: 20px; }
+
+    .field-label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #343741;
+      margin-bottom: 8px;
+    }
+
+    .drop-zone {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border: 1px solid #C7C9C8;
+      padding: 22px 20px;
+      cursor: pointer;
+      background: #FFFFFF;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .drop-zone:hover    { border-color: #343741; background: #D8D4D7; }
+    .drop-zone.selected { border-color: #343741; background: #D8D4D7; }
+
+    .drop-zone input[type="file"] { display: none; }
+
+    .drop-primary {
+      font-size: 0.875rem;
+      color: #343741;
+    }
+    .drop-hint {
+      font-size: 0.75rem;
+      font-weight: 300;
+      color: #C7C9C8;
+      white-space: nowrap;
+    }
+
+    .model-row { margin-top: 20px; }
+
+    .model-select {
+      width: 100%;
+      padding: 14px 40px 14px 16px;
+      border: 1px solid #C7C9C8;
+      background: #FFFFFF url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23343741' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 16px center;
+      font-family: inherit;
+      font-size: 0.875rem;
+      color: #000000;
+      appearance: none;
+      -webkit-appearance: none;
+      cursor: pointer;
+    }
+    .model-select:focus { outline: none; border-color: #343741; }
+
+    .btn-run {
+      display: block;
+      width: 100%;
+      margin-top: 28px;
+      padding: 17px;
+      background: #000000;
+      color: #FFFFFF;
+      border: none;
+      font-family: inherit;
+      font-size: 0.875rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-run:hover:not(:disabled) { background: #343741; }
+    .btn-run:disabled { background: #C7C9C8; cursor: not-allowed; }
+
+    #status {
+      margin-top: 16px;
+      font-size: 0.8125rem;
+      color: #343741;
+      min-height: 20px;
+    }
+    #status.is-error { color: #7B2020; }
+
+    /* ── Results ─────────────────────────────────────────── */
+    #results {
+      padding: 0 24px 100px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .results-wrap {
+      width: 100%;
+      max-width: 900px;
+    }
+
+    .results-table {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border: 1px solid #C7C9C8;
+    }
+
+    .result-col {
+      padding: 28px 22px;
+      border-right: 1px solid #C7C9C8;
+    }
+    .result-col:last-child { border-right: none; }
+
+    .col-head {
+      font-size: 0.625rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #C7C9C8;
+      margin-bottom: 14px;
+    }
+
+    .col-count {
+      font-size: 3rem;
+      font-weight: 600;
+      line-height: 1;
+      color: #000000;
+      margin-bottom: 10px;
+    }
+
+    .col-meds {
+      font-size: 0.8125rem;
+      line-height: 1.65;
+      color: #343741;
+    }
+    .col-meds.empty { color: #C7C9C8; }
+
+    .btn-copy {
+      display: block;
+      width: 100%;
+      margin-top: 16px;
+      padding: 14px;
+      background: #FFFFFF;
+      color: #000000;
+      border: 1px solid #000000;
+      font-family: inherit;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .btn-copy:hover { background: #000000; color: #FFFFFF; }
+
+    /* ── Pipeline log ────────────────────────────────────── */
+    .log-wrap {
+      margin-top: 24px;
+      border: 1px solid #C7C9C8;
+    }
+
+    .log-wrap summary {
+      list-style: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 13px 18px;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #343741;
+      cursor: pointer;
+      user-select: none;
+    }
+    .log-wrap summary::-webkit-details-marker { display: none; }
+    .log-wrap summary::after { content: '+'; font-size: 1rem; color: #C7C9C8; }
+    .log-wrap[open] summary::after { content: '−'; }
+
+    .log-body {
+      background: #343741;
+      color: #C7C9C8;
+      font-family: 'Courier New', monospace;
+      font-size: 0.8125rem;
+      line-height: 1.75;
+      padding: 20px;
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      border-top: 1px solid #C7C9C8;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Hero ──────────────────────────────────────────────── -->
+  <section id="hero">
+    <div class="hero-inner">
+      <h1>MedRecon AI</h1>
+      <p>Medication Reconciliation Assistant</p>
+      <button class="btn-hero"
+        onclick="document.getElementById('upload').scrollIntoView({ behavior: 'smooth' })">
+        Upload Documents
+      </button>
+    </div>
+  </section>
+
+  <!-- ── Upload ─────────────────────────────────────────────── -->
+  <section id="upload">
+    <div class="upload-wrap">
+      <p class="section-eyebrow">Document Upload</p>
+
+      <div class="field">
+        <span class="field-label">After Visit Summary (AVS)</span>
+        <label class="drop-zone" id="avs-zone">
+          <span class="drop-primary" id="avs-name">Choose file(s) or drop here</span>
+          <span class="drop-hint">PNG · JPG · PDF · Multi-page</span>
+          <input type="file" id="avs-file" accept=".png,.jpg,.jpeg,.pdf" multiple
+                 onchange="onFileSelected(this, 'avs')" />
+        </label>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Medication Administration Record (MAR)</span>
+        <label class="drop-zone" id="mar-zone">
+          <span class="drop-primary" id="mar-name">Choose file(s) or drop here</span>
+          <span class="drop-hint">PNG · JPG · PDF · Multi-page</span>
+          <input type="file" id="mar-file" accept=".png,.jpg,.jpeg,.pdf" multiple
+                 onchange="onFileSelected(this, 'mar')" />
+        </label>
+      </div>
+
+      <div class="model-row">
+        <span class="field-label">Model</span>
+        <select class="model-select" id="model-select">
+          <option value="MedGemma (Local)">MedGemma (Local)</option>
+          <option value="medgemma-27b-it (UF Navigator)">medgemma-27b-it (UF Navigator)</option>
+          <option value="gemma-3-27b-it (UF Navigator)">gemma-3-27b-it (UF Navigator)</option>
+          <option value="mistral-small-3.1 (UF Navigator)">mistral-small-3.1 (UF Navigator)</option>
+          <option value="granite-3.3-8b-instruct (UF Navigator)">granite-3.3-8b-instruct (UF Navigator)</option>
+        </select>
+      </div>
+
+      <button class="btn-run" id="run-btn" onclick="runPipeline()">
+        Run Reconciliation
+      </button>
+
+      <div id="status"></div>
+    </div>
+  </section>
+
+  <!-- ── Results ────────────────────────────────────────────── -->
+  <section id="results" hidden>
+    <div class="results-wrap">
+
+      <div class="results-table">
+        <div class="result-col">
+          <div class="col-head">Omissions</div>
+          <div class="col-count" id="cnt-omissions">0</div>
+          <div class="col-meds empty" id="meds-omissions">—</div>
+        </div>
+        <div class="result-col">
+          <div class="col-head">Duplications</div>
+          <div class="col-count" id="cnt-duplications">0</div>
+          <div class="col-meds empty" id="meds-duplications">—</div>
+        </div>
+        <div class="result-col">
+          <div class="col-head">Dosage Discrepancies</div>
+          <div class="col-count" id="cnt-dosage">0</div>
+          <div class="col-meds empty" id="meds-dosage">—</div>
+        </div>
+        <div class="result-col">
+          <div class="col-head">Incorrect Routes</div>
+          <div class="col-count" id="cnt-routes">0</div>
+          <div class="col-meds empty" id="meds-routes">—</div>
+        </div>
+      </div>
+
+      <button class="btn-copy" id="copy-btn" onclick="copyRow()">
+        Copy Row
+      </button>
+
+      <details class="log-wrap">
+        <summary>Pipeline Log</summary>
+        <pre class="log-body" id="log-body"></pre>
+      </details>
+
+    </div>
+  </section>
+
+  <script>
+    // ← Swap this for your production backend URL before deploying
+    const API_BASE = 'http://localhost:8000';
+
+    let rowData = [];
+
+    // ── File selection ──────────────────────────────────────
+    function onFileSelected(input, key) {
+      const files = input.files;
+      if (!files.length) return;
+      const label = files.length === 1
+        ? files[0].name
+        : `${files.length} files selected`;
+      document.getElementById(`${key}-name`).textContent = label;
+      document.getElementById(`${key}-zone`).classList.add('selected');
+    }
+
+    // ── Pipeline run ────────────────────────────────────────
+    async function runPipeline() {
+      const avsFiles = document.getElementById('avs-file').files;
+      const marFiles = document.getElementById('mar-file').files;
+      const model    = document.getElementById('model-select').value;
+
+      if (!avsFiles.length || !marFiles.length) {
+        setStatus('Please select both AVS and MAR file(s) before running.', true);
+        return;
+      }
+
+      const body = new FormData();
+      for (const f of avsFiles) body.append('avs_file', f);
+      for (const f of marFiles) body.append('mar_file', f);
+      body.append('model', model);
+
+      setLoading(true);
+      setStatus('Starting pipeline…');
+      resetResults();
+      document.getElementById('log-body').textContent = '';
+
+      try {
+        const res = await fetch(`${API_BASE}/reconcile`, { method: 'POST', body });
+
+        if (!res.ok) {
+          throw new Error(`Server returned HTTP ${res.status}`);
+        }
+
+        const reader  = res.body.getReader();
+        const decoder = new TextDecoder();
+        let   buf     = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buf += decoder.decode(value, { stream: true });
+
+          // SSE events are separated by blank lines (\n\n)
+          const parts = buf.split('\n\n');
+          buf = parts.pop(); // last chunk may be incomplete — keep it
+
+          for (const part of parts) {
+            if (part.trim()) handleSSE(part);
+          }
+        }
+      } catch (err) {
+        setStatus(`Connection error: ${err.message}`, true);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // ── SSE parser ──────────────────────────────────────────
+    function handleSSE(raw) {
+      let type = 'message', data = '';
+      for (const line of raw.split('\n')) {
+        if (line.startsWith('event: ')) type = line.slice(7).trim();
+        if (line.startsWith('data: '))  data = line.slice(6);
+      }
+      if (!data) return;
+
+      let payload;
+      try { payload = JSON.parse(data); } catch { return; }
+
+      if (type === 'log') {
+        appendLog(payload.msg);
+        const brief = payload.msg.replace(/^[\s✓─]+/, '').trim();
+        if (brief) setStatus(brief);
+      } else if (type === 'result') {
+        displayResults(payload.findings);
+        setStatus('');
+      } else if (type === 'error') {
+        appendLog(`[ERROR] ${payload.msg}`);
+        setStatus(payload.msg, true);
+      }
+    }
+
+    // ── Results display ─────────────────────────────────────
+    function displayResults(findings) {
+      const cols = [
+        { key: 'omissions',           cntId: 'cnt-omissions',   medsId: 'meds-omissions'   },
+        { key: 'duplications',         cntId: 'cnt-duplications', medsId: 'meds-duplications' },
+        { key: 'dosage_discrepancies', cntId: 'cnt-dosage',      medsId: 'meds-dosage'      },
+        { key: 'incorrect_routes',     cntId: 'cnt-routes',      medsId: 'meds-routes'      },
+      ];
+
+      rowData = [];
+
+      cols.forEach(col => {
+        const meds  = findings[col.key] || [];
+        const count = meds.length;
+        const text  = count > 0 ? meds.join(', ') : '—';
+
+        document.getElementById(col.cntId).textContent  = count;
+        const medsEl = document.getElementById(col.medsId);
+        medsEl.textContent = text;
+        medsEl.classList.toggle('empty', count === 0);
+
+        rowData.push(count > 0 ? `${count}: ${meds.join(', ')}` : '0');
+      });
+
+      const section = document.getElementById('results');
+      section.hidden = false;
+      section.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // ── Copy row ────────────────────────────────────────────
+    function copyRow() {
+      if (!rowData.length) return;
+      const text = rowData.join('\t');
+
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('copy-btn');
+        btn.textContent = 'Copied to Clipboard';
+        setTimeout(() => { btn.textContent = 'Copy Row'; }, 2000);
+      }).catch(() => {
+        // Fallback for browsers without clipboard API
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        Object.assign(ta.style, { position: 'fixed', opacity: '0' });
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      });
+    }
+
+    // ── Helpers ─────────────────────────────────────────────
+    function setLoading(on) {
+      const btn = document.getElementById('run-btn');
+      btn.disabled    = on;
+      btn.textContent = on ? 'Running…' : 'Run Reconciliation';
+    }
+
+    function setStatus(msg, isError = false) {
+      const el = document.getElementById('status');
+      el.textContent = msg;
+      el.className   = isError ? 'is-error' : '';
+    }
+
+    function appendLog(msg) {
+      const el = document.getElementById('log-body');
+      el.textContent += (el.textContent ? '\n' : '') + msg;
+    }
+
+    function resetResults() {
+      ['cnt-omissions','cnt-duplications','cnt-dosage','cnt-routes']
+        .forEach(id => { document.getElementById(id).textContent = '0'; });
+      ['meds-omissions','meds-duplications','meds-dosage','meds-routes']
+        .forEach(id => {
+          const el = document.getElementById(id);
+          el.textContent = '—';
+          el.classList.add('empty');
+        });
+      document.getElementById('results').hidden = true;
+      rowData = [];
+    }
+  </script>
+
+</body>
+</html>
