@@ -3,5 +3,5 @@ uvicorn
 google-generativeai
 pillow
 python-multipart
-openpylx
+openpyxl
 dotenv
