@@ -6,370 +6,684 @@
   <title>MedRecon AI</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    /* ── Reset ──────────────────────────────────────────── */
+    /* ── Palette ─────────────────────────────────────────────
+       #0A0F2C  Deep Space Navy   — page background
+       #D4D4E2  Soft Lavender Gray — body text, borders, subtle
+       #1E2050  Dark Indigo        — card / panel backgrounds
+       #0D0E2B  Abyss Navy         — nav / control bar
+       #1E3580  Royal Blue         — buttons, accents, hover
+    ───────────────────────────────────────────────────────── */
+    :root {
+      --navy:      #0A0F2C;
+      --lavender:  #D4D4E2;
+      --indigo:    #1E2050;
+      --abyss:     #0D0E2B;
+      --royal:     #1E3580;
+
+      --accent-red:    #C46A78; /* omissions   */
+      --accent-yellow: #C9B36B; /* duplications */
+      --accent-teal:   #5FA8A0; /* dosage       */
+      --accent-purple: #9285C4; /* routes       */
+    }
+
     *, *::before, *::after { box-sizing: border-box; }
+
+    html, body {
+      height: 100vh;
+      overflow: hidden;
+    }
 
     body {
       margin: 0;
-      font-family: 'IBM Plex Sans', sans-serif;
-      background: #FFFFFF;
-      color: #000000;
+      font-family: 'Inter', sans-serif;
+      font-weight: 300;
+      background: var(--navy);
+      color: var(--lavender);
       -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
     }
 
-    /* ── Hero ───────────────────────────────────────────── */
-    #hero {
-      background: #343741;
-      min-height: 100vh;
+    /* ── Top navigation ──────────────────────────────────────── */
+    .nav {
+      flex: 0 0 auto;
+      height: 52px;
+      background: var(--abyss);
+      border-bottom: 1px solid var(--indigo);
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      padding: 0 24px;
+      z-index: 30;
+    }
+    .nav-logo {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #FFFFFF;
+      letter-spacing: -0.01em;
+      justify-self: start;
+    }
+    .nav-center {
+      font-size: 0.8125rem;
+      font-weight: 300;
+      color: var(--lavender);
+      justify-self: center;
+      opacity: 0.85;
+    }
+    .nav-help {
+      justify-self: end;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 1px solid rgba(212, 212, 226, 0.4);
+      background: transparent;
+      color: var(--lavender);
+      font-family: inherit;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      text-align: center;
-      padding: 48px 24px;
+      transition: border-color 0.2s, background 0.2s, color 0.2s;
+    }
+    .nav-help:hover {
+      border-color: var(--royal);
+      background: var(--royal);
+      color: #FFFFFF;
     }
 
-    .hero-inner h1 {
-      font-size: clamp(2.5rem, 6vw, 4.5rem);
-      font-weight: 600;
+    /* ── Main stage ──────────────────────────────────────────── */
+    .main {
+      flex: 1 1 auto;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Each stage layer fills the main area and cross-fades */
+    .stage {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.4s ease, visibility 0.4s ease;
+    }
+    .stage.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    /* ── STAGE: Upload (States 1 & 2) ────────────────────────── */
+    #stage-upload {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .hero-title {
+      font-size: clamp(2.25rem, 5vw, 3.5rem);
+      font-weight: 700;
       color: #FFFFFF;
       letter-spacing: -0.03em;
       line-height: 1.05;
-      margin: 0 0 14px;
+      margin: 0;
     }
-
-    .hero-inner p {
-      font-size: 1.125rem;
+    .hero-sub {
+      font-size: 1.0625rem;
       font-weight: 300;
-      color: #C7C9C8;
-      letter-spacing: 0.01em;
-      margin: 0 0 52px;
+      color: var(--lavender);
+      margin: 10px 0 0;
+      opacity: 0.85;
+    }
+    .hero-instruct {
+      font-size: 0.9375rem;
+      font-weight: 400;
+      color: var(--lavender);
+      margin: 40px 0 24px;
     }
 
-    .btn-hero {
-      background: #FFFFFF;
-      color: #000000;
-      border: none;
-      padding: 15px 40px;
-      font-family: inherit;
-      font-size: 0.875rem;
-      font-weight: 500;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-    .btn-hero:hover { background: #D8D4D7; }
-
-    /* ── Upload ─────────────────────────────────────────── */
-    #upload {
-      background: #FFFFFF;
-      padding: 100px 24px;
+    .upload-grid {
       display: flex;
+      gap: 28px;
       justify-content: center;
-    }
-
-    .upload-wrap {
-      width: 100%;
-      max-width: 560px;
-    }
-
-    .section-eyebrow {
-      font-size: 0.6875rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: #C7C9C8;
-      margin: 0 0 40px;
-    }
-
-    .field + .field { margin-top: 20px; }
-
-    .field-label {
-      display: block;
-      font-size: 0.75rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #343741;
-      margin-bottom: 8px;
     }
 
     .drop-zone {
+      position: relative;
+      width: 240px;
+      height: 240px;
+      background: var(--indigo);
+      border: 2px dashed rgba(212, 212, 226, 0.4);
+      border-radius: 16px;
       display: flex;
+      flex-direction: column;
       align-items: center;
-      justify-content: space-between;
-      border: 1px solid #C7C9C8;
-      padding: 22px 20px;
+      justify-content: center;
+      text-align: center;
+      padding: 20px;
       cursor: pointer;
-      background: #FFFFFF;
-      transition: border-color 0.15s, background 0.15s;
+      transition: border-color 0.2s, background 0.2s, box-shadow 0.2s, transform 0.2s;
     }
-    .drop-zone:hover    { border-color: #343741; background: #D8D4D7; }
-    .drop-zone.selected { border-color: #343741; background: #D8D4D7; }
-
+    .drop-zone:hover {
+      border-color: rgba(212, 212, 226, 0.75);
+      background: #23265C;
+    }
+    .drop-zone.drag-over {
+      border-style: solid;
+      border-color: var(--royal);
+      background: #23265C;
+      box-shadow: 0 0 0 4px rgba(30, 53, 128, 0.35), 0 8px 28px rgba(30, 53, 128, 0.45);
+      transform: translateY(-2px);
+    }
+    .drop-zone.selected {
+      border-style: solid;
+      border-color: var(--royal);
+      background: #262a64;
+    }
     .drop-zone input[type="file"] { display: none; }
 
-    .drop-primary {
-      font-size: 0.875rem;
-      color: #343741;
+    .dz-icon {
+      width: 44px;
+      height: 44px;
+      margin-bottom: 16px;
+      color: var(--lavender);
+      stroke: var(--lavender);
     }
-    .drop-hint {
-      font-size: 0.75rem;
+    .drop-zone.selected .dz-icon { display: none; }
+
+    .dz-check {
+      display: none;
+      width: 44px;
+      height: 44px;
+      margin-bottom: 16px;
+      color: var(--royal);
+      stroke: var(--royal);
+    }
+    .drop-zone.selected .dz-check { display: block; }
+
+    .dz-label {
+      font-size: 1.0625rem;
+      font-weight: 600;
+      color: #FFFFFF;
+      letter-spacing: 0.02em;
+    }
+    .dz-hint {
+      font-size: 0.8125rem;
       font-weight: 300;
-      color: #C7C9C8;
+      color: var(--lavender);
+      opacity: 0.7;
+      margin-top: 6px;
+    }
+    .drop-zone.selected .dz-hint { display: none; }
+
+    .dz-filename {
+      display: none;
+      max-width: 100%;
+      margin-top: 8px;
+      font-size: 0.8125rem;
+      color: var(--lavender);
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .drop-zone.selected .dz-filename { display: block; }
+
+    /* ── STAGE 2: Control bar (slides up) ────────────────────── */
+    .control-bar {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--abyss);
+      border-top: 1px solid var(--indigo);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      transform: translateY(100%);
+      transition: transform 0.35s ease-out;
+      z-index: 20;
+    }
+    body.ready.stage-upload .control-bar { transform: translateY(0); }
+
+    /* ── STAGE 3: Split panels ───────────────────────────────── */
+    #stage-split {
+      display: flex;
+    }
+    .panel-left {
+      flex: 0 0 38%;
+      background: var(--indigo);
+      display: flex;
+      flex-direction: column;
+      padding: 40px;
+      overflow: hidden;
+    }
+    /* Controls take the upper space and stay vertically centered;
+       the pipeline log sits below and pushes the content up. */
+    .panel-main {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 22px;
+    }
+    .panel-right {
+      flex: 1 1 62%;
+      background: var(--navy);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
     }
 
-    .model-row { margin-top: 20px; }
-
-    .model-select {
+    .confirm-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
       width: 100%;
-      padding: 14px 40px 14px 16px;
-      border: 1px solid #C7C9C8;
-      background: #FFFFFF url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23343741' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 16px center;
+      font-family: inherit;
+      font-size: 0.9375rem;
+      color: var(--lavender);
+      max-width: 100%;
+      text-align: left;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s, opacity 0.2s;
+    }
+    .confirm-item:hover:not(:disabled) {
+      background: #262a64;
+      border-color: rgba(212, 212, 226, 0.25);
+    }
+    .confirm-item:disabled { cursor: not-allowed; opacity: 0.55; }
+    .confirm-item svg {
+      flex: 0 0 auto;
+      width: 20px;
+      height: 20px;
+      color: var(--royal);
+      stroke: var(--royal);
+    }
+    .confirm-tag {
+      font-weight: 600;
+      color: #FFFFFF;
+    }
+    .confirm-name {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ── Form controls ───────────────────────────────────────── */
+    .model-select {
+      padding: 12px 40px 12px 16px;
+      border: 1px solid rgba(212, 212, 226, 0.25);
+      border-radius: 10px;
+      background: var(--indigo) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23D4D4E2' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 16px center;
       font-family: inherit;
       font-size: 0.875rem;
-      color: #000000;
+      font-weight: 400;
+      color: var(--lavender);
       appearance: none;
       -webkit-appearance: none;
       cursor: pointer;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
-    .model-select:focus { outline: none; border-color: #343741; }
+    .model-select:focus {
+      outline: none;
+      border-color: var(--royal);
+      box-shadow: 0 0 0 3px rgba(30, 53, 128, 0.45);
+    }
+    .control-bar .model-select { min-width: 320px; }
+    .panel-left .model-select { width: 100%; }
 
-    .btn-run {
-      display: block;
-      width: 100%;
-      margin-top: 28px;
-      padding: 17px;
-      background: #000000;
+    .btn-primary {
+      padding: 12px 28px;
+      background: var(--royal);
       color: #FFFFFF;
       border: none;
+      border-radius: 10px;
       font-family: inherit;
-      font-size: 0.875rem;
-      font-weight: 500;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
       cursor: pointer;
-      transition: background 0.15s;
+      box-shadow: 0 4px 16px rgba(30, 53, 128, 0.4);
+      transition: filter 0.2s, transform 0.1s, box-shadow 0.2s;
     }
-    .btn-run:hover:not(:disabled) { background: #343741; }
-    .btn-run:disabled { background: #C7C9C8; cursor: not-allowed; }
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.18); }
+    .btn-primary:active:not(:disabled) { transform: translateY(1px); }
+    .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; }
 
-    #status {
-      margin-top: 16px;
-      font-size: 0.8125rem;
-      color: #343741;
-      min-height: 20px;
-    }
-    #status.is-error { color: #7B2020; }
-
-    /* ── Results ─────────────────────────────────────────── */
-    #results {
-      padding: 0 24px 100px;
-      display: flex;
-      justify-content: center;
-    }
-
-    .results-wrap {
-      width: 100%;
-      max-width: 900px;
-    }
-
-    .results-table {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      border: 1px solid #C7C9C8;
-    }
-
-    .result-col {
-      padding: 28px 22px;
-      border-right: 1px solid #C7C9C8;
-    }
-    .result-col:last-child { border-right: none; }
-
-    .col-head {
-      font-size: 0.625rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: #C7C9C8;
-      margin-bottom: 14px;
-    }
-
-    .col-count {
-      font-size: 3rem;
-      font-weight: 600;
-      line-height: 1;
-      color: #000000;
-      margin-bottom: 10px;
-    }
-
-    .col-meds {
-      font-size: 0.8125rem;
-      line-height: 1.65;
-      color: #343741;
-    }
-    .col-meds.empty { color: #C7C9C8; }
-
-    .btn-copy {
-      display: block;
-      width: 100%;
-      margin-top: 16px;
-      padding: 14px;
-      background: #FFFFFF;
-      color: #000000;
-      border: 1px solid #000000;
+    .btn-secondary {
+      padding: 11px 24px;
+      background: transparent;
+      color: var(--lavender);
+      border: 1px solid var(--royal);
+      border-radius: 10px;
       font-family: inherit;
-      font-size: 0.8125rem;
-      font-weight: 500;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
+      font-size: 0.9375rem;
+      font-weight: 600;
       cursor: pointer;
-      transition: background 0.15s, color 0.15s;
+      transition: background 0.2s, color 0.2s;
     }
-    .btn-copy:hover { background: #000000; color: #FFFFFF; }
+    .btn-secondary:hover:not(:disabled) { background: var(--royal); color: #FFFFFF; }
+    .btn-secondary:disabled { opacity: 0.55; cursor: not-allowed; }
 
-    /* ── Pipeline log ────────────────────────────────────── */
+    .btn-cancel {
+      padding: 11px 24px;
+      background: transparent;
+      color: var(--accent-red);
+      border: 1px solid var(--accent-red);
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .btn-cancel:hover { background: var(--accent-red); color: #FFFFFF; }
+
+    /* While a reconciliation is running, swap Run Again → Cancel
+       and lock the file re-selection buttons. */
+    .btn-cancel { display: none; }
+    body.running .btn-cancel   { display: block; }
+    body.running #run-again-btn { display: none; }
+
+    /* ── Pipeline log (left panel, below content) ────────────── */
     .log-wrap {
+      flex: 0 0 auto;
       margin-top: 24px;
-      border: 1px solid #C7C9C8;
+      border: 1px solid var(--royal);
+      border-radius: 10px;
+      overflow: hidden;
     }
-
     .log-wrap summary {
       list-style: none;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 13px 18px;
+      padding: 11px 16px;
       font-size: 0.6875rem;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.1em;
-      color: #343741;
+      color: var(--lavender);
       cursor: pointer;
       user-select: none;
     }
     .log-wrap summary::-webkit-details-marker { display: none; }
-    .log-wrap summary::after { content: '+'; font-size: 1rem; color: #C7C9C8; }
+    .log-wrap summary::after { content: '+'; font-size: 1rem; color: var(--lavender); opacity: 0.7; }
     .log-wrap[open] summary::after { content: '−'; }
 
     .log-body {
-      background: #343741;
-      color: #C7C9C8;
+      background: var(--abyss);
+      color: var(--lavender);
       font-family: 'Courier New', monospace;
-      font-size: 0.8125rem;
-      line-height: 1.75;
-      padding: 20px;
+      font-size: 0.78rem;
+      line-height: 1.7;
+      padding: 16px 18px;
       margin: 0;
+      max-height: 200px;
+      overflow-y: auto;
       white-space: pre-wrap;
       word-break: break-word;
-      border-top: 1px solid #C7C9C8;
+      border-top: 1px solid var(--royal);
+    }
+
+    /* ── Right panel: loading ────────────────────────────────── */
+    .loading-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 22px;
+    }
+    .spinner {
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      border: 3px solid rgba(212, 212, 226, 0.18);
+      border-top-color: var(--royal);
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-status {
+      font-size: 0.875rem;
+      color: var(--lavender);
+      opacity: 0.85;
+      max-width: 360px;
+      text-align: center;
+      min-height: 20px;
+    }
+    .loading-status.is-error { color: var(--accent-red); opacity: 1; }
+
+    /* ── Right panel: results ────────────────────────────────── */
+    .results-box {
+      width: 100%;
+      max-width: 560px;
+      max-height: 100%;
+      display: none;
+      flex-direction: column;
+      gap: 20px;
+    }
+    body.has-results .results-box { display: flex; }
+    body.has-results .loading-box { display: none; }
+
+    .metric-grid-scroll {
+      overflow-y: auto;
+      min-height: 0;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+    .metric-card {
+      background: var(--indigo);
+      border-radius: 14px;
+      border-left: 4px solid var(--lavender);
+      padding: 22px 24px;
+    }
+    .metric-card.m-omissions    { border-left-color: var(--accent-red); }
+    .metric-card.m-duplications { border-left-color: var(--accent-yellow); }
+    .metric-card.m-dosage       { border-left-color: var(--accent-teal); }
+    .metric-card.m-routes       { border-left-color: var(--accent-purple); }
+
+    .metric-label {
+      font-size: 0.8125rem;
+      font-weight: 400;
+      color: var(--lavender);
+      opacity: 0.85;
+      margin-bottom: 10px;
+    }
+    .metric-value {
+      font-size: 2.5rem;
+      font-weight: 700;
+      line-height: 1;
+      color: #FFFFFF;
+    }
+    .metric-meds {
+      margin-top: 12px;
+      font-size: 0.8125rem;
+      font-weight: 300;
+      line-height: 1.55;
+      color: var(--lavender);
+      word-break: break-word;
+    }
+    .metric-meds.empty { opacity: 0.45; }
+
+    .btn-copy {
+      width: 100%;
+      padding: 14px;
+      background: var(--royal);
+      color: #FFFFFF;
+      border: none;
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(30, 53, 128, 0.4);
+      transition: filter 0.2s, transform 0.1s;
+    }
+    .btn-copy:hover { filter: brightness(1.18); }
+    .btn-copy:active { transform: translateY(1px); }
+
+    .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+    /* ── Responsive (down to standard laptop widths) ─────────── */
+    @media (max-width: 1024px) {
+      .drop-zone { width: 200px; height: 200px; }
+      .control-bar .model-select { min-width: 240px; }
+      .panel-left { padding: 28px; }
+      .panel-right { padding: 28px; }
     }
   </style>
 </head>
-<body>
+<body class="stage-upload">
 
-  <!-- ── Hero ──────────────────────────────────────────────── -->
-  <section id="hero">
-    <div class="hero-inner">
-      <h1>MedRecon AI</h1>
-      <p>Medication Reconciliation Assistant</p>
-      <button class="btn-hero"
-        onclick="document.getElementById('upload').scrollIntoView({ behavior: 'smooth' })">
-        Upload Documents
-      </button>
-    </div>
-  </section>
+  <!-- ── Top navigation ──────────────────────────────────────── -->
+  <nav class="nav">
+    <span class="nav-logo">MedRecon AI</span>
+    <span class="nav-center">University of Florida</span>
+    <button class="nav-help" title="Help" aria-label="Help"
+            onclick="alert('Upload your After Visit Summary (AVS) and Medication Administration Record (MAR), choose a model, then run reconciliation.')">?</button>
+  </nav>
 
-  <!-- ── Upload ─────────────────────────────────────────────── -->
-  <section id="upload">
-    <div class="upload-wrap">
-      <p class="section-eyebrow">Document Upload</p>
+  <main class="main">
 
-      <div class="field">
-        <span class="field-label">After Visit Summary (AVS)</span>
+    <!-- ── STAGE 1 & 2: Upload ───────────────────────────────── -->
+    <section class="stage active" id="stage-upload">
+      <h1 class="hero-title">MedRecon AI</h1>
+      <p class="hero-sub">Medication Reconciliation Assistant</p>
+      <p class="hero-instruct">Upload your AVS and MAR below.</p>
+
+      <div class="upload-grid">
+        <!-- AVS -->
         <label class="drop-zone" id="avs-zone">
-          <span class="drop-primary" id="avs-name">Choose file(s) or drop here</span>
-          <span class="drop-hint">PNG · JPG · PDF · Multi-page</span>
+          <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 16V4" /><path d="M6 10l6-6 6 6" /><path d="M4 20h16" />
+          </svg>
+          <svg class="dz-check" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+          <span class="dz-label">AVS</span>
+          <span class="dz-hint">Drop or click to upload</span>
+          <span class="dz-filename" id="avs-name"></span>
           <input type="file" id="avs-file" accept=".png,.jpg,.jpeg,.pdf" multiple
                  onchange="onFileSelected(this, 'avs')" />
         </label>
-      </div>
 
-      <div class="field">
-        <span class="field-label">Medication Administration Record (MAR)</span>
+        <!-- MAR -->
         <label class="drop-zone" id="mar-zone">
-          <span class="drop-primary" id="mar-name">Choose file(s) or drop here</span>
-          <span class="drop-hint">PNG · JPG · PDF · Multi-page</span>
+          <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 16V4" /><path d="M6 10l6-6 6 6" /><path d="M4 20h16" />
+          </svg>
+          <svg class="dz-check" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+          <span class="dz-label">MAR</span>
+          <span class="dz-hint">Drop or click to upload</span>
+          <span class="dz-filename" id="mar-name"></span>
           <input type="file" id="mar-file" accept=".png,.jpg,.jpeg,.pdf" multiple
                  onchange="onFileSelected(this, 'mar')" />
         </label>
       </div>
 
-      <div class="model-row">
-        <span class="field-label">Model</span>
-        <select class="model-select" id="model-select">
+      <!-- Control bar (slides up when both files present) -->
+      <div class="control-bar">
+        <select class="model-select" id="model-select" onchange="syncModel('model-select')">
           <option value="medgemma-27b-it (UF Navigator)">medgemma-27b-it (UF Navigator)</option>
           <option value="gemma-3-27b-it (UF Navigator)">gemma-3-27b-it (UF Navigator)</option>
           <option value="mistral-small-3.1 (UF Navigator)">mistral-small-3.1 (UF Navigator)</option>
           <option value="granite-3.3-8b-instruct (UF Navigator)">granite-3.3-8b-instruct (UF Navigator)</option>
         </select>
+        <button class="btn-primary" id="run-btn" onclick="runPipeline()">Run Reconciliation</button>
+      </div>
+    </section>
+
+    <!-- ── STAGE 3: Split ────────────────────────────────────── -->
+    <section class="stage" id="stage-split">
+      <!-- Left panel -->
+      <div class="panel-left">
+        <div class="panel-main">
+          <button type="button" class="confirm-item" id="confirm-avs-btn" title="Click to choose different file(s)" onclick="reselectFile('avs')">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+            <span><span class="confirm-tag">AVS</span>&nbsp;&nbsp;<span class="confirm-name" id="confirm-avs"></span></span>
+          </button>
+          <button type="button" class="confirm-item" id="confirm-mar-btn" title="Click to choose different file(s)" onclick="reselectFile('mar')">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+            <span><span class="confirm-tag">MAR</span>&nbsp;&nbsp;<span class="confirm-name" id="confirm-mar"></span></span>
+          </button>
+
+          <select class="model-select" id="model-select-2" onchange="syncModel('model-select-2')">
+            <option value="medgemma-27b-it (UF Navigator)">medgemma-27b-it (UF Navigator)</option>
+            <option value="gemma-3-27b-it (UF Navigator)">gemma-3-27b-it (UF Navigator)</option>
+            <option value="mistral-small-3.1 (UF Navigator)">mistral-small-3.1 (UF Navigator)</option>
+            <option value="granite-3.3-8b-instruct (UF Navigator)">granite-3.3-8b-instruct (UF Navigator)</option>
+          </select>
+
+          <button class="btn-secondary" id="run-again-btn" onclick="runPipeline()">Run Again</button>
+          <button class="btn-cancel" id="cancel-btn" onclick="cancelPipeline()">Cancel</button>
+        </div>
+
+        <!-- Pipeline log — pushes the content above it up as it fills -->
+        <details class="log-wrap" open>
+          <summary>Pipeline Log</summary>
+          <pre class="log-body" id="log-body"></pre>
+        </details>
       </div>
 
-      <button class="btn-run" id="run-btn" onclick="runPipeline()">
-        Run Reconciliation
-      </button>
-
-      <div id="status"></div>
-    </div>
-  </section>
-
-  <!-- ── Results ────────────────────────────────────────────── -->
-  <section id="results" hidden>
-    <div class="results-wrap">
-
-      <div class="results-table">
-        <div class="result-col">
-          <div class="col-head">Omissions</div>
-          <div class="col-count" id="cnt-omissions">0</div>
-          <div class="col-meds empty" id="meds-omissions">—</div>
+      <!-- Right panel -->
+      <div class="panel-right">
+        <div class="loading-box">
+          <div class="spinner"></div>
+          <div class="loading-status" id="status"></div>
         </div>
-        <div class="result-col">
-          <div class="col-head">Duplications</div>
-          <div class="col-count" id="cnt-duplications">0</div>
-          <div class="col-meds empty" id="meds-duplications">—</div>
-        </div>
-        <div class="result-col">
-          <div class="col-head">Dosage Discrepancies</div>
-          <div class="col-count" id="cnt-dosage">0</div>
-          <div class="col-meds empty" id="meds-dosage">—</div>
-        </div>
-        <div class="result-col">
-          <div class="col-head">Incorrect Routes</div>
-          <div class="col-count" id="cnt-routes">0</div>
-          <div class="col-meds empty" id="meds-routes">—</div>
+
+        <div class="results-box">
+          <div class="metric-grid metric-grid-scroll">
+            <div class="metric-card m-omissions">
+              <div class="metric-label">Omissions</div>
+              <div class="metric-value" id="cnt-omissions">0</div>
+              <div class="metric-meds empty" id="meds-omissions">—</div>
+            </div>
+            <div class="metric-card m-duplications">
+              <div class="metric-label">Duplications</div>
+              <div class="metric-value" id="cnt-duplications">0</div>
+              <div class="metric-meds empty" id="meds-duplications">—</div>
+            </div>
+            <div class="metric-card m-dosage">
+              <div class="metric-label">Dosage Discrepancies</div>
+              <div class="metric-value" id="cnt-dosage">0</div>
+              <div class="metric-meds empty" id="meds-dosage">—</div>
+            </div>
+            <div class="metric-card m-routes">
+              <div class="metric-label">Incorrect Routes</div>
+              <div class="metric-value" id="cnt-routes">0</div>
+              <div class="metric-meds empty" id="meds-routes">—</div>
+            </div>
+          </div>
+          <button class="btn-copy" id="copy-btn" onclick="copyRow()">Copy to Clipboard</button>
         </div>
       </div>
-
-      <button class="btn-copy" id="copy-btn" onclick="copyRow()">
-        Copy Row
-      </button>
-
-      <details class="log-wrap">
-        <summary>Pipeline Log</summary>
-        <pre class="log-body" id="log-body"></pre>
-      </details>
-
-    </div>
-  </section>
+    </section>
+  </main>
 
   <script>
     // ← Swap this for your production backend URL before deploying
     const API_BASE = 'https://medrecon.onrender.com';
 
     let rowData = [];
+    let abortController = null;   // tracks the in-flight reconciliation
 
     // ── File selection ──────────────────────────────────────
     function onFileSelected(input, key) {
@@ -380,6 +694,61 @@
         : `${files.length} files selected`;
       document.getElementById(`${key}-name`).textContent = label;
       document.getElementById(`${key}-zone`).classList.add('selected');
+      checkBothFiles();
+      // Keep the stage-3 confirmation labels in sync when files are
+      // swapped from the split view.
+      fillConfirmations();
+    }
+
+    // ── Re-select files from stage 3 (only when idle) ────────
+    function reselectFile(key) {
+      if (document.body.classList.contains('running')) return;
+      document.getElementById(`${key}-file`).click();
+    }
+
+    // ── State: reveal control bar when both files chosen ─────
+    function checkBothFiles() {
+      const avs = document.getElementById('avs-file').files.length;
+      const mar = document.getElementById('mar-file').files.length;
+      document.body.classList.toggle('ready', !!(avs && mar));
+    }
+
+    // ── Keep the two model dropdowns in sync ─────────────────
+    function syncModel(sourceId) {
+      const val = document.getElementById(sourceId).value;
+      document.getElementById('model-select').value = val;
+      document.getElementById('model-select-2').value = val;
+    }
+
+    // ── Drag & drop wiring (presentation only) ───────────────
+    ['avs', 'mar'].forEach(key => {
+      const zone  = document.getElementById(`${key}-zone`);
+      const input = document.getElementById(`${key}-file`);
+      ['dragenter', 'dragover'].forEach(ev =>
+        zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.add('drag-over'); }));
+      ['dragleave', 'dragend'].forEach(ev =>
+        zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.remove('drag-over'); }));
+      zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('drag-over');
+        if (e.dataTransfer && e.dataTransfer.files.length) {
+          input.files = e.dataTransfer.files;
+          onFileSelected(input, key);
+        }
+      });
+    });
+
+    // ── Stage transitions ───────────────────────────────────
+    function showStage(name) {
+      document.getElementById('stage-upload').classList.toggle('active', name === 'upload');
+      document.getElementById('stage-split').classList.toggle('active',  name === 'split');
+      document.body.classList.toggle('stage-upload', name === 'upload');
+      document.body.classList.toggle('stage-split',  name === 'split');
+    }
+
+    function fillConfirmations() {
+      document.getElementById('confirm-avs').textContent = document.getElementById('avs-name').textContent;
+      document.getElementById('confirm-mar').textContent = document.getElementById('mar-name').textContent;
     }
 
     // ── Pipeline run ────────────────────────────────────────
@@ -393,6 +762,12 @@
         return;
       }
 
+      // Move into split view, show loading state
+      fillConfirmations();
+      showStage('split');
+      document.body.classList.remove('has-results');
+      document.body.classList.add('running');
+
       const body = new FormData();
       for (const f of avsFiles) body.append('avs_file', f);
       for (const f of marFiles) body.append('mar_file', f);
@@ -403,8 +778,10 @@
       resetResults();
       document.getElementById('log-body').textContent = '';
 
+      abortController = new AbortController();
+
       try {
-        const res = await fetch(`${API_BASE}/reconcile`, { method: 'POST', body });
+        const res = await fetch(`${API_BASE}/reconcile`, { method: 'POST', body, signal: abortController.signal });
 
         if (!res.ok) {
           throw new Error(`Server returned HTTP ${res.status}`);
@@ -429,10 +806,22 @@
           }
         }
       } catch (err) {
-        setStatus(`Connection error: ${err.message}`, true);
+        if (err.name === 'AbortError') {
+          appendLog('— Reconciliation cancelled by user —');
+          setStatus('Reconciliation cancelled.');
+        } else {
+          setStatus(`Connection error: ${err.message}`, true);
+        }
       } finally {
         setLoading(false);
+        document.body.classList.remove('running');
+        abortController = null;
       }
+    }
+
+    // ── Cancel an in-progress reconciliation ─────────────────
+    function cancelPipeline() {
+      if (abortController) abortController.abort();
     }
 
     // ── SSE parser ──────────────────────────────────────────
@@ -463,10 +852,10 @@
     // ── Results display ─────────────────────────────────────
     function displayResults(findings) {
       const cols = [
-        { key: 'omissions',           cntId: 'cnt-omissions',   medsId: 'meds-omissions'   },
+        { key: 'omissions',            cntId: 'cnt-omissions',    medsId: 'meds-omissions'    },
         { key: 'duplications',         cntId: 'cnt-duplications', medsId: 'meds-duplications' },
-        { key: 'dosage_discrepancies', cntId: 'cnt-dosage',      medsId: 'meds-dosage'      },
-        { key: 'incorrect_routes',     cntId: 'cnt-routes',      medsId: 'meds-routes'      },
+        { key: 'dosage_discrepancies', cntId: 'cnt-dosage',      medsId: 'meds-dosage'       },
+        { key: 'incorrect_routes',     cntId: 'cnt-routes',      medsId: 'meds-routes'       },
       ];
 
       rowData = [];
@@ -484,9 +873,7 @@
         rowData.push(count > 0 ? `${count}: ${meds.join(', ')}` : '0');
       });
 
-      const section = document.getElementById('results');
-      section.hidden = false;
-      section.scrollIntoView({ behavior: 'smooth' });
+      document.body.classList.add('has-results');
     }
 
     // ── Copy row ────────────────────────────────────────────
@@ -497,7 +884,7 @@
       navigator.clipboard.writeText(text).then(() => {
         const btn = document.getElementById('copy-btn');
         btn.textContent = 'Copied to Clipboard';
-        setTimeout(() => { btn.textContent = 'Copy Row'; }, 2000);
+        setTimeout(() => { btn.textContent = 'Copy to Clipboard'; }, 2000);
       }).catch(() => {
         // Fallback for browsers without clipboard API
         const ta = document.createElement('textarea');
@@ -512,20 +899,27 @@
 
     // ── Helpers ─────────────────────────────────────────────
     function setLoading(on) {
-      const btn = document.getElementById('run-btn');
-      btn.disabled    = on;
-      btn.textContent = on ? 'Running…' : 'Run Reconciliation';
+      const runBtn   = document.getElementById('run-btn');
+      const againBtn = document.getElementById('run-again-btn');
+      runBtn.disabled    = on;
+      runBtn.textContent = on ? 'Running…' : 'Run Reconciliation';
+      againBtn.disabled    = on;
+      againBtn.textContent = on ? 'Running…' : 'Run Again';
+      // Lock file re-selection while a reconciliation is in progress
+      document.getElementById('confirm-avs-btn').disabled = on;
+      document.getElementById('confirm-mar-btn').disabled = on;
     }
 
     function setStatus(msg, isError = false) {
       const el = document.getElementById('status');
       el.textContent = msg;
-      el.className   = isError ? 'is-error' : '';
+      el.className    = isError ? 'loading-status is-error' : 'loading-status';
     }
 
     function appendLog(msg) {
       const el = document.getElementById('log-body');
       el.textContent += (el.textContent ? '\n' : '') + msg;
+      el.scrollTop = el.scrollHeight; // keep newest line in view
     }
 
     function resetResults() {
@@ -537,7 +931,6 @@
           el.textContent = '—';
           el.classList.add('empty');
         });
-      document.getElementById('results').hidden = true;
       rowData = [];
     }
   </script>
