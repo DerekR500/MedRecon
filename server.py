@@ -107,8 +107,8 @@ async def reconcile(
                 return
 
         # ── Stages A & B run in parallel — one thread per page across both ──
-        yield evt("log", {"msg": f"── Stage A: Extracting from AVS ({len(avs_file)} page(s)) ──"})
-        yield evt("log", {"msg": f"── Stage B: Extracting from MAR ({len(mar_file)} page(s)) ──"})
+        yield evt("log", {"msg": f"── Stage A: Extracting from AVS ({len(avs_file)} page(s)) ──"}) 
+        yield evt("log", {"msg": f"── Stage B: Extracting from ({len(mar_file) + len(avs_file)} page(s)) ──"})
 
         a_tasks = [asyncio.to_thread(stage_a_extract_from_image, model, img) for img in avs_imgs]
         b_tasks = [asyncio.to_thread(stage_b_extract_mar_from_image, model, img) for img in mar_imgs]
@@ -153,7 +153,7 @@ async def reconcile(
         mar_data = {"medications": mar_meds, "allergies_on_mar": mar_allergies}
         yield evt("log", {"msg": f"  MAR total: {len(mar_meds)} MAR medication(s)"})
 
-        yield evt("log", {"msg": "  ✓ Stages A & B complete (ran in parallel)"})
+        yield evt("log", {"msg": "  ✓ Extraction Complete"})
 
         # Stage C
         yield evt("log", {"msg": "── Stage C: LLM comparison ──"})
@@ -168,6 +168,135 @@ async def reconcile(
 
         yield evt("log", {"msg": "  ✓ Comparison complete\n\nPipeline complete."})
         yield evt("result", {"findings": findings})
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
+
+
+# ── Batch reconciliation endpoint ─────────────────────────────────────────────
+
+@app.post("/reconcile-batch")
+async def reconcile_batch(
+    files: list[UploadFile] = File(...),
+    paths: list[str]        = Form(...),
+    model: str              = Form(...),
+):
+    """
+    Reconcile many case pairs in one request. Files arrive flat; their original
+    folder structure is reconstructed from the companion `paths` field. Expected
+    per-file relative path layout:
+
+        <root>/<CASE_ID>/<AVS|MAR>/<file>
+
+    Files not inside an AVS or MAR subfolder are ignored. Every case runs its own
+    Stage A + Stage B in parallel and then Stage C; all cases run concurrently and
+    results stream back one-by-one as each case finishes.
+    """
+    # Group uploads into case pairs using their relative paths.
+    cases: dict[str, dict[str, list[UploadFile]]] = {}
+    for path, upload in zip(paths, files):
+        parts = path.replace("\\", "/").split("/")
+        kind = None
+        idx  = None
+        for j, seg in enumerate(parts):
+            up = seg.upper()
+            if up == "AVS":
+                kind, idx = "avs", j
+                break
+            if up == "MAR":
+                kind, idx = "mar", j
+                break
+        # Require a parent case folder before AVS/MAR and a filename after it.
+        if kind is None or idx == 0 or idx >= len(parts) - 1:
+            continue
+        case_id = parts[idx - 1]
+        cases.setdefault(case_id, {"avs": [], "mar": []})[kind].append(upload)
+
+    case_ids = sorted(cases.keys())
+
+    async def _process_case(case_id: str) -> dict:
+        avs_uploads = cases[case_id]["avs"]
+        mar_uploads = cases[case_id]["mar"]
+        if not avs_uploads or not mar_uploads:
+            raise RuntimeError("missing AVS or MAR folder")
+
+        # Load every page for this case concurrently.
+        loaded = await asyncio.gather(
+            *(_upload_to_image(u) for u in avs_uploads),
+            *(_upload_to_image(u) for u in mar_uploads),
+        )
+        avs_imgs = loaded[: len(avs_uploads)]
+        mar_imgs = loaded[len(avs_uploads):]
+
+        # Stage A + Stage B in parallel — one thread per page across both.
+        a_tasks = [asyncio.to_thread(stage_a_extract_from_image, model, img) for img in avs_imgs]
+        b_tasks = [asyncio.to_thread(stage_b_extract_mar_from_image, model, img) for img in mar_imgs]
+        results   = await asyncio.gather(*a_tasks, *b_tasks)
+        a_results = results[: len(a_tasks)]
+        b_results = results[len(a_tasks):]
+
+        avs_meds, avs_allergies = [], []
+        for page_data in a_results:
+            if not page_data:
+                raise RuntimeError("Stage A failed — could not extract from AVS.")
+            avs_meds.extend(page_data.get("medications") or [])
+            avs_allergies.extend(page_data.get("allergies") or [])
+
+        mar_meds, mar_allergies = [], []
+        for page_data in b_results:
+            if not page_data:
+                raise RuntimeError("Stage B failed — could not extract from MAR.")
+            mar_meds.extend(page_data.get("medications") or [])
+            mar_allergies.extend(page_data.get("allergies_on_mar") or [])
+
+        home_data = {"medications": avs_meds, "allergies": avs_allergies}
+        mar_data  = {"medications": mar_meds, "allergies_on_mar": mar_allergies}
+
+        findings = await asyncio.to_thread(stage_c_compare, model, home_data, mar_data)
+        if not findings:
+            raise RuntimeError("Stage C failed — could not compare documents.")
+        return findings
+
+    async def stream():
+        def evt(event: str, data: dict) -> str:
+            return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+        if not case_ids:
+            yield evt("error", {"msg": "No valid case folders found. Expected <case>/AVS/… and <case>/MAR/… structure."})
+            return
+
+        n = len(case_ids)
+        yield evt("log", {"msg": f"── Batch: {n} case(s) detected ──"})
+
+        # Run every case concurrently; stream each as it finishes via a queue so
+        # rows appear one-by-one instead of waiting for the whole batch.
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async def worker(cid: str):
+            try:
+                findings = await _process_case(cid)
+                await queue.put(("result", cid, findings))
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                await queue.put(("error", cid, str(e)))
+
+        tasks = [asyncio.create_task(worker(cid)) for cid in case_ids]
+
+        done = 0
+        try:
+            for _ in range(n):
+                kind, cid, payload = await queue.get()
+                if kind == "error":
+                    yield evt("error", {"case_id": cid, "msg": f"Case {cid} failed: {payload}"})
+                    return  # stop the whole batch on the first failure
+                done += 1
+                yield evt("result", {"case_id": cid, "findings": payload})
+                yield evt("log", {"msg": f"Pipeline {done}/{n} complete."})
+            yield evt("log", {"msg": "\nBatch complete."})
+        finally:
+            for t in tasks:
+                if not t.done():
+                    t.cancel()
 
     return StreamingResponse(stream(), media_type="text/event-stream")
 

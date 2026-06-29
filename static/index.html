@@ -539,6 +539,106 @@
 
     .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
+    /* ── Multiple Cases Upload zone (wide drop-zone variant) ──── */
+    .upload-batch {
+      width: 100%;
+      max-width: 508px;   /* spans the two square cards above */
+      margin-top: 26px;
+    }
+    /* Scoped (0,2,0) so it beats the responsive .drop-zone rule below */
+    .upload-batch .drop-zone {
+      width: 100%;
+      height: auto;
+      min-height: 108px;
+      flex-direction: row;
+      justify-content: flex-start;
+      text-align: left;
+      gap: 18px;
+      padding: 20px 24px;
+    }
+    .upload-batch .dz-icon,
+    .upload-batch .dz-check { margin-bottom: 0; flex: 0 0 auto; }
+    .upload-batch .dz-text  { display: flex; flex-direction: column; min-width: 0; }
+    .upload-batch .dz-filename { margin-top: 4px; }
+
+    /* ── Batch run button + control-bar button visibility ────── */
+    #run-batch-btn { display: none; }
+    #run-btn       { display: none; }
+    body.ready.stage-upload       #run-btn       { display: block; }
+    body.batch-ready.stage-upload #run-batch-btn { display: block; }
+    body.batch-ready.stage-upload .control-bar   { transform: translateY(0); }
+
+    /* ── Batch left-panel summary (replaces single confirmations) */
+    .batch-summary { display: none; flex-direction: column; gap: 6px; }
+    body.batch-mode .batch-summary { display: flex; }
+    body.batch-mode #confirm-avs-btn,
+    body.batch-mode #confirm-mar-btn,
+    body.batch-mode #run-again-btn { display: none; }
+    .batch-summary-title { font-size: 1.0625rem; font-weight: 600; color: #FFFFFF; }
+    .batch-summary-sub   { font-size: 0.875rem; color: var(--lavender); opacity: 0.85; }
+
+    /* Batch-only left-panel actions: re-upload (when idle) and re-run (after results) */
+    #batch-reupload-btn, #batch-again-btn { display: none; }
+    body.batch-mode:not(.running)              #batch-reupload-btn { display: block; }
+    body.batch-mode.has-results:not(.running)  #batch-again-btn    { display: block; }
+
+    /* ── Batch results (right panel) ─────────────────────────── */
+    .batch-results-box { display: none; width: 100%; height: 100%; flex-direction: column; gap: 14px; }
+    body.batch-mode .results-box { display: none !important; }
+    body.batch-mode.has-results .batch-results-box { display: flex; }
+    body.batch-mode.has-results .loading-box { display: none; }
+    /* Right panel fills height; only the row list scrolls (left panel fixed) */
+    body.batch-mode.has-results .panel-right {
+      align-items: stretch;
+      justify-content: flex-start;
+      overflow: hidden;
+    }
+
+    .batch-toolbar { flex: 0 0 auto; }
+    .batch-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+    }
+    .batch-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: var(--indigo);
+      border-radius: 12px;
+      padding: 14px 18px;
+    }
+    .batch-case {
+      flex: 0 0 auto;
+      min-width: 78px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #FFFFFF;
+    }
+    .batch-chips { display: flex; gap: 10px; flex: 1 1 auto; flex-wrap: wrap; }
+    .chip {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      background: var(--navy);
+      border-left: 3px solid var(--lavender);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.78rem;
+      color: var(--lavender);
+      cursor: default;
+      white-space: nowrap;
+    }
+    .chip b { font-size: 1rem; font-weight: 700; color: #FFFFFF; }
+    .chip.c-omissions    { border-left-color: var(--accent-red); }
+    .chip.c-duplications { border-left-color: var(--accent-yellow); }
+    .chip.c-dosage       { border-left-color: var(--accent-teal); }
+    .chip.c-routes       { border-left-color: var(--accent-purple); }
+
     /* ── Responsive (down to standard laptop widths) ─────────── */
     @media (max-width: 1024px) {
       .drop-zone { width: 200px; height: 200px; }
@@ -598,6 +698,25 @@
         </label>
       </div>
 
+      <!-- Multiple Cases Upload (folder upload) -->
+      <div class="upload-batch">
+        <label class="drop-zone" id="batch-zone">
+          <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          </svg>
+          <svg class="dz-check" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+          <span class="dz-text">
+            <span class="dz-label">Multiple Cases Upload</span>
+            <span class="dz-hint">Upload a folder of case pairs.</span>
+            <span class="dz-filename" id="batch-name"></span>
+          </span>
+          <input type="file" id="batch-file" webkitdirectory directory multiple
+                 onchange="onBatchFolderSelected(this)" />
+        </label>
+      </div>
+
       <!-- Control bar (slides up when both files present) -->
       <div class="control-bar">
         <select class="model-select" id="model-select" onchange="syncModel('model-select')">
@@ -607,6 +726,7 @@
           <option value="granite-3.3-8b-instruct (UF Navigator)">granite-3.3-8b-instruct (UF Navigator)</option>
         </select>
         <button class="btn-primary" id="run-btn" onclick="runPipeline()">Run Reconciliation</button>
+        <button class="btn-primary" id="run-batch-btn" onclick="runBatch()">Run Batch</button>
       </div>
     </section>
 
@@ -615,6 +735,11 @@
       <!-- Left panel -->
       <div class="panel-left">
         <div class="panel-main">
+          <div class="batch-summary">
+            <span class="batch-summary-title">Multiple Cases</span>
+            <span class="batch-summary-sub" id="batch-count-label"></span>
+          </div>
+
           <button type="button" class="confirm-item" id="confirm-avs-btn" title="Click to choose different file(s)" onclick="reselectFile('avs')">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
             <span><span class="confirm-tag">AVS</span>&nbsp;&nbsp;<span class="confirm-name" id="confirm-avs"></span></span>
@@ -632,6 +757,8 @@
           </select>
 
           <button class="btn-secondary" id="run-again-btn" onclick="runPipeline()">Run Again</button>
+          <button class="btn-secondary" id="batch-reupload-btn" onclick="reuploadBatch()">Re-upload</button>
+          <button class="btn-secondary" id="batch-again-btn" onclick="runBatch()">Run Again</button>
           <button class="btn-cancel" id="cancel-btn" onclick="cancelPipeline()">Cancel</button>
         </div>
 
@@ -674,16 +801,25 @@
           </div>
           <button class="btn-copy" id="copy-btn" onclick="copyRow()">Copy to Clipboard</button>
         </div>
+
+        <div class="batch-results-box">
+          <div class="batch-toolbar">
+            <button class="btn-copy" id="batch-copy-btn" onclick="copyBatch()">Copy to Clipboard</button>
+          </div>
+          <div class="batch-list" id="batch-list"></div>
+        </div>
       </div>
     </section>
   </main>
 
   <script>
     // ← Swap this for your production backend URL before deploying
-    const API_BASE = 'https://medrecon.onrender.com';
+    const API_BASE = '';
 
     let rowData = [];
-    let abortController = null;   // tracks the in-flight reconciliation
+    let abortController = null;   // tracks the in-flight reconciliation (single OR batch)
+    let batchCases = [];          // [{ caseId, avs:[File], mar:[File] }, …]
+    let batchRows  = [];          // [[caseId, omissionsCell, dupsCell, doseCell, routesCell], …]
 
     // ── File selection ──────────────────────────────────────
     function onFileSelected(input, key) {
@@ -704,6 +840,64 @@
     function reselectFile(key) {
       if (document.body.classList.contains('running')) return;
       document.getElementById(`${key}-file`).click();
+    }
+
+    // ── Multiple Cases Upload — folder parsing ───────────────
+    // Reconstruct  <root>/<CASE>/<AVS|MAR>/<file>  from the flat file list.
+    function parseBatchFolder(fileList) {
+      const cases = {};
+      for (const file of fileList) {
+        const rel   = file.webkitRelativePath || file.name;
+        const parts = rel.split('/');
+        let idx = -1, kind = null;
+        for (let j = 0; j < parts.length; j++) {
+          const u = parts[j].toUpperCase();
+          if (u === 'AVS') { kind = 'avs'; idx = j; break; }
+          if (u === 'MAR') { kind = 'mar'; idx = j; break; }
+        }
+        // Ignore files not inside an AVS/MAR subfolder that has a parent case.
+        if (idx <= 0 || idx >= parts.length - 1) continue;
+        const caseId = parts[idx - 1];
+        (cases[caseId] ||= { avs: [], mar: [] })[kind].push(file);
+      }
+      return Object.keys(cases).sort().map(id => ({
+        caseId: id, avs: cases[id].avs, mar: cases[id].mar,
+      }));
+    }
+
+    function onBatchFolderSelected(input) {
+      const newCases = parseBatchFolder(input.files);
+
+      if (!newCases.length) {
+        alert('No valid case folders found. Expected /<case>/AVS/… and /<case>/MAR/… inside the selected folder.');
+        input.value = '';            // allow re-picking the same folder
+        return;                      // keep any previously selected cases
+      }
+
+      // Merge with the existing selection so multiple folders can be added
+      // across separate picks (the browser only allows one folder per dialog).
+      const map = new Map(batchCases.map(c => [c.caseId, c]));
+      for (const c of newCases) map.set(c.caseId, c);   // same caseId → replace
+      batchCases = [...map.values()].sort((a, b) => a.caseId.localeCompare(b.caseId));
+
+      input.value = '';              // so re-selecting the same folder re-fires onchange
+      updateBatchSelectionUI();
+    }
+
+    function updateBatchSelectionUI() {
+      const n = batchCases.length;
+      const txt = `${n} case${n === 1 ? '' : 's'} selected`;
+      document.getElementById('batch-name').textContent = txt;
+      document.getElementById('batch-zone').classList.add('selected');
+      document.body.classList.add('batch-ready');
+      const lbl = document.getElementById('batch-count-label');
+      if (lbl) lbl.textContent = txt;
+    }
+
+    // ── Re-upload more / different case folders from stage 3 ──
+    function reuploadBatch() {
+      if (document.body.classList.contains('running')) return;
+      document.getElementById('batch-file').click();
     }
 
     // ── State: reveal control bar when both files chosen ─────
@@ -765,6 +959,7 @@
       // Move into split view, show loading state
       fillConfirmations();
       showStage('split');
+      document.body.classList.remove('batch-mode');
       document.body.classList.remove('has-results');
       document.body.classList.add('running');
 
@@ -819,9 +1014,182 @@
       }
     }
 
-    // ── Cancel an in-progress reconciliation ─────────────────
+    // ── Cancel an in-progress reconciliation (single or batch) ─
     function cancelPipeline() {
       if (abortController) abortController.abort();
+    }
+
+    // ── Batch run ───────────────────────────────────────────
+    async function runBatch() {
+      if (document.body.classList.contains('running')) return;
+      if (!batchCases.length) {
+        alert('Please select a folder of case pairs before running.');
+        return;
+      }
+      const model = document.getElementById('model-select').value;
+
+      // Move into split view in batch mode, show loading state
+      showStage('split');
+      document.body.classList.add('batch-mode');
+      document.body.classList.remove('has-results');
+      document.body.classList.add('running');
+
+      const n = batchCases.length;
+      document.getElementById('batch-count-label').textContent = `${n} case${n === 1 ? '' : 's'} selected`;
+      document.getElementById('batch-list').innerHTML = '';
+      document.getElementById('log-body').textContent = '';
+      batchRows = [];
+
+      // Flatten every case's files, preserving their relative paths so the
+      // server can regroup them into AVS/MAR pairs.
+      const body = new FormData();
+      for (const c of batchCases) {
+        for (const f of c.avs) {
+          body.append('files', f);
+          body.append('paths', f.webkitRelativePath || `${c.caseId}/AVS/${f.name}`);
+        }
+        for (const f of c.mar) {
+          body.append('files', f);
+          body.append('paths', f.webkitRelativePath || `${c.caseId}/MAR/${f.name}`);
+        }
+      }
+      body.append('model', model);
+
+      setLoading(true);
+      setStatus('Starting batch…');
+
+      abortController = new AbortController();
+
+      try {
+        const res = await fetch(`${API_BASE}/reconcile-batch`, { method: 'POST', body, signal: abortController.signal });
+
+        if (!res.ok) {
+          throw new Error(`Server returned HTTP ${res.status}`);
+        }
+
+        const reader  = res.body.getReader();
+        const decoder = new TextDecoder();
+        let   buf     = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buf += decoder.decode(value, { stream: true });
+
+          const parts = buf.split('\n\n');
+          buf = parts.pop();
+
+          for (const part of parts) {
+            if (part.trim()) handleBatchSSE(part);
+          }
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          appendLog('— Batch cancelled by user —');
+          setStatus('Batch cancelled.');
+        } else {
+          setStatus(`Connection error: ${err.message}`, true);
+        }
+      } finally {
+        setLoading(false);
+        document.body.classList.remove('running');
+        abortController = null;
+      }
+    }
+
+    // ── Batch SSE parser ────────────────────────────────────
+    function handleBatchSSE(raw) {
+      let type = 'message', data = '';
+      for (const line of raw.split('\n')) {
+        if (line.startsWith('event: ')) type = line.slice(7).trim();
+        if (line.startsWith('data: '))  data = line.slice(6);
+      }
+      if (!data) return;
+
+      let payload;
+      try { payload = JSON.parse(data); } catch { return; }
+
+      if (type === 'log') {
+        appendLog(payload.msg);
+        const brief = payload.msg.replace(/^[\s✓─]+/, '').trim();
+        if (brief) setStatus(brief);
+      } else if (type === 'result') {
+        addBatchRow(payload.case_id, payload.findings);
+        setStatus('');
+      } else if (type === 'error') {
+        const who = payload.case_id ? `Case ${payload.case_id}` : 'Batch';
+        appendLog(`[ERROR] ${who}: ${payload.msg}`);
+        setStatus(payload.msg, true);
+      }
+    }
+
+    // ── Append one completed case row to the batch results ───
+    function addBatchRow(caseId, findings) {
+      const cats = [
+        { key: 'omissions',            label: 'Omissions',            cls: 'c-omissions'    },
+        { key: 'duplications',         label: 'Duplications',         cls: 'c-duplications' },
+        { key: 'dosage_discrepancies', label: 'Dosage Discrepancies', cls: 'c-dosage'       },
+        { key: 'incorrect_routes',     label: 'Incorrect Routes',     cls: 'c-routes'       },
+      ];
+
+      const row = document.createElement('div');
+      row.className = 'batch-row';
+
+      const label = document.createElement('div');
+      label.className = 'batch-case';
+      label.textContent = caseId;
+      row.appendChild(label);
+
+      const chips = document.createElement('div');
+      chips.className = 'batch-chips';
+      const rowCells = [caseId];   // for Excel copy: caseId + 4 category cells
+      cats.forEach(cat => {
+        const meds  = findings[cat.key] || [];
+        const count = meds.length;
+        const chip = document.createElement('div');
+        chip.className = `chip ${cat.cls}`;
+        chip.title = count ? `${cat.label}: ${meds.join(', ')}` : `${cat.label}: none`;
+        const text = document.createTextNode(`${cat.label} `);
+        const b    = document.createElement('b');
+        b.textContent = count;
+        chip.appendChild(text);
+        chip.appendChild(b);
+        chips.appendChild(chip);
+        rowCells.push(count > 0 ? `${count}: ${meds.join(', ')}` : '0');
+      });
+      row.appendChild(chips);
+
+      document.getElementById('batch-list').appendChild(row);
+      batchRows.push(rowCells);
+      document.body.classList.add('has-results');
+
+      // Keep the newest row in view — the list scrolls, everything else fixed.
+      const list = document.getElementById('batch-list');
+      list.scrollTop = list.scrollHeight;
+    }
+
+    // ── Copy all batch rows as TSV (multiple rows → multiple Excel rows) ──
+    function copyBatch() {
+      if (!batchRows.length) return;
+      const text = batchRows.map(r => r.join('\t')).join('\n');
+
+      const done = () => {
+        const btn = document.getElementById('batch-copy-btn');
+        btn.textContent = 'Copied to Clipboard';
+        setTimeout(() => { btn.textContent = 'Copy to Clipboard'; }, 2000);
+      };
+
+      navigator.clipboard.writeText(text).then(done).catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        Object.assign(ta.style, { position: 'fixed', opacity: '0' });
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        done();
+      });
     }
 
     // ── SSE parser ──────────────────────────────────────────
@@ -901,10 +1269,13 @@
     function setLoading(on) {
       const runBtn   = document.getElementById('run-btn');
       const againBtn = document.getElementById('run-again-btn');
+      const batchBtn = document.getElementById('run-batch-btn');
       runBtn.disabled    = on;
       runBtn.textContent = on ? 'Running…' : 'Run Reconciliation';
       againBtn.disabled    = on;
       againBtn.textContent = on ? 'Running…' : 'Run Again';
+      batchBtn.disabled    = on;
+      batchBtn.textContent = on ? 'Running…' : 'Run Batch';
       // Lock file re-selection while a reconciliation is in progress
       document.getElementById('confirm-avs-btn').disabled = on;
       document.getElementById('confirm-mar-btn').disabled = on;
