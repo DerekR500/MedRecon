@@ -88,15 +88,40 @@ async def reconcile(
         def evt(event: str, data: dict) -> str:
             return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
-        # Stage A — one API call per AVS page, results merged
+        # ── Load all AVS + MAR pages concurrently ──
+        yield evt("log", {"msg": f"── Loading {len(avs_file)} AVS + {len(mar_file)} MAR page(s) ──"})
+        loaded = await asyncio.gather(
+            *(_upload_to_image(u) for u in avs_file),
+            *(_upload_to_image(u) for u in mar_file),
+            return_exceptions=True,
+        )
+        avs_imgs = loaded[: len(avs_file)]
+        mar_imgs = loaded[len(avs_file):]
+        for i, img in enumerate(avs_imgs):
+            if isinstance(img, Exception):
+                yield evt("error", {"msg": f"Stage A error (page {i + 1}): {img}"})
+                return
+        for i, img in enumerate(mar_imgs):
+            if isinstance(img, Exception):
+                yield evt("error", {"msg": f"Stage B error (page {i + 1}): {img}"})
+                return
+
+        # ── Stages A & B run in parallel — one thread per page across both ──
         yield evt("log", {"msg": f"── Stage A: Extracting from AVS ({len(avs_file)} page(s)) ──"})
+        yield evt("log", {"msg": f"── Stage B: Extracting from MAR ({len(mar_file)} page(s)) ──"})
+
+        a_tasks = [asyncio.to_thread(stage_a_extract_from_image, model, img) for img in avs_imgs]
+        b_tasks = [asyncio.to_thread(stage_b_extract_mar_from_image, model, img) for img in mar_imgs]
+
+        results   = await asyncio.gather(*a_tasks, *b_tasks, return_exceptions=True)
+        a_results = results[: len(a_tasks)]
+        b_results = results[len(a_tasks):]
+
+        # Collect Stage A results
         avs_meds, avs_allergies = [], []
-        for i, upload in enumerate(avs_file):
-            try:
-                img       = await _upload_to_image(upload)
-                page_data = await asyncio.to_thread(stage_a_extract_from_image, model, img)
-            except Exception as e:
-                yield evt("error", {"msg": f"Stage A error (page {i + 1}): {e}"})
+        for i, page_data in enumerate(a_results):
+            if isinstance(page_data, Exception):
+                yield evt("error", {"msg": f"Stage A error (page {i + 1}): {page_data}"})
                 return
             if not page_data:
                 yield evt("error", {"msg": f"Stage A failed on page {i + 1} — could not extract from AVS."})
@@ -105,20 +130,16 @@ async def reconcile(
             p_alrg = page_data.get("allergies")   or []
             avs_meds.extend(p_meds)
             avs_allergies.extend(p_alrg)
-            yield evt("log", {"msg": f"  ✓ Page {i + 1}: {len(p_meds)} medication(s) | {len(p_alrg)} allergy entry(ies)"})
+            yield evt("log", {"msg": f"  ✓ AVS page {i + 1}: {len(p_meds)} medication(s) | {len(p_alrg)} allergy entry(ies)"})
 
         home_data = {"medications": avs_meds, "allergies": avs_allergies}
-        yield evt("log", {"msg": f"  Total: {len(avs_meds)} medication(s) | {len(avs_allergies)} allergy entry(ies)"})
+        yield evt("log", {"msg": f"  AVS total: {len(avs_meds)} medication(s) | {len(avs_allergies)} allergy entry(ies)"})
 
-        # Stage B — one API call per MAR page, results merged
-        yield evt("log", {"msg": f"── Stage B: Extracting from MAR ({len(mar_file)} page(s)) ──"})
+        # Collect Stage B results
         mar_meds, mar_allergies = [], []
-        for i, upload in enumerate(mar_file):
-            try:
-                img       = await _upload_to_image(upload)
-                page_data = await asyncio.to_thread(stage_b_extract_mar_from_image, model, img)
-            except Exception as e:
-                yield evt("error", {"msg": f"Stage B error (page {i + 1}): {e}"})
+        for i, page_data in enumerate(b_results):
+            if isinstance(page_data, Exception):
+                yield evt("error", {"msg": f"Stage B error (page {i + 1}): {page_data}"})
                 return
             if not page_data:
                 yield evt("error", {"msg": f"Stage B failed on page {i + 1} — could not extract from MAR."})
@@ -127,10 +148,12 @@ async def reconcile(
             p_alrg = page_data.get("allergies_on_mar") or []
             mar_meds.extend(p_meds)
             mar_allergies.extend(p_alrg)
-            yield evt("log", {"msg": f"  ✓ Page {i + 1}: {len(p_meds)} MAR medication(s)"})
+            yield evt("log", {"msg": f"  ✓ MAR page {i + 1}: {len(p_meds)} MAR medication(s)"})
 
         mar_data = {"medications": mar_meds, "allergies_on_mar": mar_allergies}
-        yield evt("log", {"msg": f"  Total: {len(mar_meds)} MAR medication(s)"})
+        yield evt("log", {"msg": f"  MAR total: {len(mar_meds)} MAR medication(s)"})
+
+        yield evt("log", {"msg": "  ✓ Stages A & B complete (ran in parallel)"})
 
         # Stage C
         yield evt("log", {"msg": "── Stage C: LLM comparison ──"})
