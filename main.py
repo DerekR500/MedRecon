@@ -129,9 +129,26 @@ IMPORTANT RULES:
     "allergies": array of strings (each allergy as listed)
     "medications": array of medication objects with fields:
         "name"       : first word only of the generic or brand name (e.g., "Furosemide" not "Furosemide 40 mg") (string)
-        "dose_mg"    : numeric dose in mg, or null if not a mg dose
-        "dose_raw"   : dose exactly as written (string)
-        "route"      : e.g. "PO", "IV" (string)
+        "dose_mg"    : numeric dose in mg of the ACTUAL ADMINISTERED dose, or null if not a mg dose.
+                       If the document shows both a formulation/tablet strength AND a parenthetical
+                       actual administered dose, ALWAYS extract the parenthetical actual dose —
+                       never the leading formulation strength.
+                       Examples:
+                         "amiodarone 100 mg tablet ... Take 0.5 tablets (50 mg) by mouth" -> dose_mg: 50
+                         "gabapentin 250 mg/5 mL solution ... Give 2.5 mL (125 mg)"       -> dose_mg: 125
+        "dose_raw"   : the actual administered dose exactly as written (string) — the same
+                       administered dose used for dose_mg, not the formulation strength
+                       (e.g., "0.5 tablets (50 mg)" not "100 mg tablet")
+        "route"      : exactly one of: "PO", "IV", "IM", "SubQ", "G-tube", "J-tube", "NG",
+                       "Nasal", "Inhaled", "Topical", "PR". Map any other phrasing in the
+                       document to the closest value in this list, e.g.:
+                         "by mouth" / "oral" / "mouth"     -> "PO"
+                         "under the skin" / "subcutaneous" -> "SubQ"
+                         "tube" (type unspecified)         -> the specific tube type ("G-tube",
+                           "J-tube", or "NG") stated elsewhere in the document for that same
+                           medication or access route, if determinable from context
+                       If the route genuinely maps to none of these values, use null.
+                       NEVER output a free-text route outside this list.
         "frequency"  : e.g. "Once daily", "BID", "PRN" (string)
         "indication" : what it is for, or null if not listed (string)
 - Do NOT invent or infer any information not explicitly visible in the image.
@@ -220,7 +237,16 @@ IMPORTANT RULES:
         "name"       : first word only of the generic or brand name (e.g., "Furosemide" not "Furosemide 40 mg") (string)
         "dose_mg"    : numeric dose in mg, or null if not a mg dose
         "dose_raw"   : dose exactly as written (string)
-        "route"      : e.g. "PO", "IV" (string)
+        "route"      : exactly one of: "PO", "IV", "IM", "SubQ", "G-tube", "J-tube", "NG",
+                       "Nasal", "Inhaled", "Topical", "PR". Map any other phrasing in the
+                       document to the closest value in this list, e.g.:
+                         "by mouth" / "oral" / "mouth"     -> "PO"
+                         "under the skin" / "subcutaneous" -> "SubQ"
+                         "tube" (type unspecified)         -> the specific tube type ("G-tube",
+                           "J-tube", or "NG") stated elsewhere in the document for that same
+                           medication or access route, if determinable from context
+                       If the route genuinely maps to none of these values, use null.
+                       NEVER output a free-text route outside this list.
         "frequency"  : e.g. "Once daily", "BID", "PRN" (string)
         "scheduled_times": array of strings e.g. ["0800", "2000"], or null
 - Do NOT invent or infer any information not explicitly visible in the image.
