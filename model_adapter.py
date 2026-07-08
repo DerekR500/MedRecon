@@ -44,7 +44,8 @@ def call_model(prompt: str, model_name: str, image=None) -> str:
 # ── Backend: UF Navigator (OpenAI-compatible REST API) ───────────────────────
 
 def _call_uf_navigator(prompt: str, model_id: str, image=None) -> str:
-    from openai import OpenAI
+    import time
+    from openai import OpenAI, APIConnectionError, APITimeoutError
 
     api_key = os.getenv("KEY_NAME")
     if not api_key:
@@ -66,11 +67,26 @@ def _call_uf_navigator(prompt: str, model_id: str, image=None) -> str:
     else:
         content = prompt
 
-    response = client.chat.completions.create(
-        model=model_id,
-        messages=[{"role": "user", "content": content}],
-    )
-    return response.choices[0].message.content
+    # Retry once on transient network failures (connection/timeout) so a single
+    # blip on one page doesn't kill a whole multi-page reconciliation run.
+    # Auth/invalid-request errors are NOT retried -- they would fail identically
+    # again. If the retry also fails, the exception propagates up so server.py's
+    # evt("error", ...) handling still sees it.
+    max_attempts = 2
+    backoff_seconds = 2
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = client.chat.completions.create(
+                model=model_id,
+                messages=[{"role": "user", "content": content}],
+            )
+            return response.choices[0].message.content
+        except (APIConnectionError, APITimeoutError) as e:
+            if attempt == max_attempts:
+                raise
+            print(f"[WARN] UF Navigator call failed ({e}), retrying once in {backoff_seconds}s...")
+            time.sleep(backoff_seconds)
 
 
 # ── Helper ───────────────────────────────────────────────────────────────────
