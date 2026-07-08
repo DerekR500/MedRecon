@@ -9,7 +9,7 @@ to minimize hallucinations.
 Pipeline Stages:
   Stage A — Extract home medications (preadmission form) → structured JSON
   Stage B — Extract MAR medications → structured JSON
-  Stage C — Compare medications and extract 4 values of discrepancy
+  Stage C — Deterministic comparison via RxNorm/RxClass (no LLM call)
 
 Usage:
   python main.py
@@ -23,8 +23,13 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 import json
 import re
+
+import requests
 from PIL import Image
+
 from model_adapter import call_model
+from match_engine import match_medications, compare_matched_pairs
+from class_lookup import find_duplications
 
 
 MODEL_NAME = "gemma-3-27b-it (UF Navigator)"
@@ -150,6 +155,7 @@ def stage_a_extract_from_image(model_name: str, image) -> dict | None:
         meds = result.get("medications", [])
         allergies = result.get("allergies", [])
         print(f"  ✓ Extracted {len(meds)} medications, {len(allergies)} allergies from image")
+        print(json.dumps(result, indent=2))
     return result
 
 
@@ -237,64 +243,88 @@ def stage_b_extract_mar_from_image(model_name: str, image) -> dict | None:
     if result is not None:
         meds = result.get("medications", [])
         print(f"  ✓ Extracted {len(meds)} MAR medications from image")
+        print(json.dumps(result, indent=2))
     return result
 
 
 # ─────────────────────────────────────────────
-# STAGE C — LLM Medication Comparison
+# STAGE C — Deterministic Medication Comparison
 # ─────────────────────────────────────────────
 
-STAGE_C_PROMPT_TEMPLATE = """You are a clinical data extraction assistant comparing two medication lists.
-
-AFTER VISIT SUMMARY (AVS) MEDICATIONS:
-{avs_medications_json}
-
-MEDICATION ADMINISTRATION RECORD (MAR) MEDICATIONS:
-{mar_medications_json}
-
-Identify issues in exactly these four categories and return ONLY valid JSON.
-
-DEFINITIONS:
-- "omissions": medications present in the AVS but absent from the MAR — check one directions (AVS→MAR and MAR→AVS). For each medication in the AVS, look up its "name" in the MAR list. If it is not found there, it is an omission.
-- "duplications": medications listed MORE THAN ONCE in the SAME document (AVS or MAR)
-- "dosage_discrepancies": medications appearing in BOTH documents but with DIFFERENT doses
-- "incorrect_routes": medications appearing in BOTH documents but with DIFFERENT administration routes (e.g., PO vs IV)
-
-RULES:
-- Output ONLY valid JSON. No prose, no markdown, no explanation.
-- Each value must be a JSON array of medication name strings.
-- Use ONLY the first word of the medication name (e.g., "Furosemide" not "Furosemide 40 mg PO").
-- Do NOT invent issues not clearly supported by the data above.
-
-Respond with ONLY a JSON object with keys: "omissions", "duplications", "dosage_discrepancies", "incorrect_routes".
-"""
+def _first_word(name: str) -> str:
+    """Reduce a medication name to its first word — the shape app.py and the
+    frontend already expect (e.g. "Furosemide" not "Furosemide 40 mg")."""
+    words = (name or "").split()
+    return words[0] if words else ""
 
 
-def stage_c_compare(model_name: str, avs_data: dict, mar_data: dict) -> dict | None:
+def stage_c_compare(avs_data: dict, mar_data: dict) -> dict | None:
     """
-    Stage C: LLM-based comparison of AVS and MAR medication lists.
-    Returns dict with omissions, duplications, dosage_discrepancies, incorrect_routes.
+    Stage C: deterministic comparison of AVS and MAR medication lists via
+    RxNorm/RxClass (match_engine + class_lookup) — no LLM call.
+
+    Only bare drug-name strings are ever sent to RxNorm/RxClass — no dose,
+    route, case ID, or file name. If the APIs are unreachable, identity
+    matching falls back to Tier C fuzzy matching (works offline) and the
+    duplications check simply returns fewer/no results, with a logged
+    warning — the reconciliation never crashes on network failure.
+
+    Returns dict with omissions, duplications, dosage_discrepancies,
+    incorrect_routes — each a list of medication name strings (first word
+    only, the shape the rest of the app already depends on).
     """
-    print("\n── Stage C: LLM comparison of AVS vs MAR ──")
+    print("\n── Stage C: Deterministic matching (RxNorm/RxClass) ──")
 
-    avs_meds_json = json.dumps(avs_data.get("medications") or [], indent=2)
-    mar_meds_json = json.dumps(mar_data.get("medications") or [], indent=2)
+    avs_meds = avs_data.get("medications") or []
+    mar_meds = mar_data.get("medications") or []
 
-    prompt = (STAGE_C_PROMPT_TEMPLATE
-              .replace("{avs_medications_json}", avs_meds_json)
-              .replace("{mar_medications_json}", mar_meds_json))
+    # One shared HTTP session + caches for this pipeline run, so repeated drug
+    # names within this case's AVS+MAR don't trigger duplicate API calls.
+    # Caches are deliberately per-case: batch cases run concurrently, and a
+    # fresh cache per case is correct and safe (no cross-case data mixing).
+    # A global cross-request cache is a possible future optimization only.
+    session = requests.Session()
+    rxcui_cache: dict = {}   # raw drug name        -> ingredient-level RxCUI
+    class_cache: dict = {}   # normalized drug name -> ATC class name list
 
-    raw = call_model(prompt, model_name)
-    result = parse_json_response(raw)
+    matched_pairs, unmatched_avs = match_medications(
+        avs_meds, mar_meds, session=session, rxcui_cache=rxcui_cache)
+    dosage_discrepancies, route_discrepancies = compare_matched_pairs(matched_pairs)
 
-    if result is not None:
-        print(
-            f"  ✓ {len(result.get('omissions', []))} omission(s), "
-            f"{len(result.get('duplications', []))} duplication(s), "
-            f"{len(result.get('dosage_discrepancies', []))} dose discrepancy(ies), "
-            f"{len(result.get('incorrect_routes', []))} route issue(s)"
-        )
-    return result
+    try:
+        dup_groups = find_duplications(mar_meds, session, class_cache,
+                                       rxcui_cache=rxcui_cache)
+    except Exception as e:
+        print(f"[WARN] RxClass duplication check failed ({e}) — reporting no duplications.")
+        dup_groups = []
+
+    if "__UNREACHABLE__" in rxcui_cache.values():
+        print("[WARN] RxNorm unreachable — identity matching fell back to fuzzy (Tier C).")
+    if any(v is None for v in class_cache.values()):
+        print("[WARN] RxClass unreachable for some drugs — duplication results may be incomplete.")
+
+    # Flatten duplication groups to a deduped list of drug name strings.
+    dup_names: list[str] = []
+    for group in dup_groups:
+        for drug in group["drugs"]:
+            name = _first_word(drug)
+            if name not in dup_names:
+                dup_names.append(name)
+
+    findings = {
+        "omissions":            [_first_word(m["name"]) for m in unmatched_avs],
+        "duplications":         dup_names,
+        "dosage_discrepancies": [_first_word(d["name"]) for d in dosage_discrepancies],
+        "incorrect_routes":     [_first_word(r["name"]) for r in route_discrepancies],
+    }
+
+    print(
+        f"  ✓ {len(findings['omissions'])} omission(s), "
+        f"{len(findings['duplications'])} duplication(s), "
+        f"{len(findings['dosage_discrepancies'])} dose discrepancy(ies), "
+        f"{len(findings['incorrect_routes'])} route issue(s)"
+    )
+    return findings
 
 
 # ─────────────────────────────────────────────
@@ -335,9 +365,9 @@ def run_reconciliation(
         print("[ERROR] Stage B failed — could not extract MAR medications.")
         return {}
 
-    # Stage C — LLM comparison
+    # Stage C — deterministic comparison (no LLM call)
     avs_data = {"medications": home_meds}
-    findings = stage_c_compare(model_name, avs_data, mar_data)
+    findings = stage_c_compare(avs_data, mar_data)
     if not findings:
         print("[ERROR] Stage C failed — could not compare documents.")
         return {}

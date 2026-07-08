@@ -108,7 +108,7 @@ async def reconcile(
 
         # ── Stages A & B run in parallel — one thread per page across both ──
         yield evt("log", {"msg": f"── Stage A: Extracting from AVS ({len(avs_file)} page(s)) ──"}) 
-        yield evt("log", {"msg": f"── Stage B: Extracting from ({len(mar_file) + len(avs_file)} page(s)) ──"})
+        yield evt("log", {"msg": f"── Stage B: Extracting from ({len(mar_file)} page(s)) ──"})
 
         a_tasks = [asyncio.to_thread(stage_a_extract_from_image, model, img) for img in avs_imgs]
         b_tasks = [asyncio.to_thread(stage_b_extract_mar_from_image, model, img) for img in mar_imgs]
@@ -156,9 +156,9 @@ async def reconcile(
         yield evt("log", {"msg": "  ✓ Extraction Complete"})
 
         # Stage C
-        yield evt("log", {"msg": "── Stage C: LLM comparison ──"})
+        yield evt("log", {"msg": "── Stage C: Deterministic matching (RxNorm/RxClass) ──"})
         try:
-            findings = await asyncio.to_thread(stage_c_compare, model, home_data, mar_data)
+            findings = await asyncio.to_thread(stage_c_compare, home_data, mar_data)
         except Exception as e:
             yield evt("error", {"msg": f"Stage C error: {e}"})
             return
@@ -251,7 +251,7 @@ async def reconcile_batch(
         home_data = {"medications": avs_meds, "allergies": avs_allergies}
         mar_data  = {"medications": mar_meds, "allergies_on_mar": mar_allergies}
 
-        findings = await asyncio.to_thread(stage_c_compare, model, home_data, mar_data)
+        findings = await asyncio.to_thread(stage_c_compare, home_data, mar_data)
         if not findings:
             raise RuntimeError("Stage C failed — could not compare documents.")
         return findings

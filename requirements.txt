@@ -6,3 +6,5 @@ python-multipart
 openpyxl
 dotenv
 openai
+requests
+rapidfuzz

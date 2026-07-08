@@ -134,10 +134,10 @@ def run_pipeline(avs_files, mar_files, model_name):
     yield empty_df, [], "\n".join(logs)
 
     # ── Stage C ──────────────────────────────────────────────────────────────
-    log("── Stage C: LLM comparison ──")
+    log("── Stage C: Deterministic matching (RxNorm/RxClass) ──")
     yield empty_df, [], "\n".join(logs)
 
-    findings = stage_c_compare(model_name, home_data, mar_data)
+    findings = stage_c_compare(home_data, mar_data)
     if not findings:
         log("[ERROR] Stage C failed — could not compare documents.")
         yield empty_df, [], "\n".join(logs)
