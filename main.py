@@ -32,19 +32,6 @@ from match_engine import match_medications, compare_matched_pairs
 from class_lookup import find_duplications
 
 
-MODEL_NAME = "gemma-3-27b-it (UF Navigator)"
-
-
-# ─────────────────────────────────────────────
-# 0. MODEL LOAD
-# ─────────────────────────────────────────────
-
-def load_model(model_name: str = MODEL_NAME) -> str:
-    """Return the model name for use throughout the pipeline."""
-    print(f"✓ Model selected: {model_name}")
-    return model_name
-
-
 # ─────────────────────────────────────────────
 # HELPER — Parse JSON from model output safely
 # ─────────────────────────────────────────────
@@ -73,48 +60,18 @@ def parse_json_response(raw_text: str) -> dict | list | None:
     print("[RAW OUTPUT]:", raw_text[:500])
     return None
 
-
 # ─────────────────────────────────────────────
-# STAGE A — Extract Home Medications
+# Shared extraction filtering
 # ─────────────────────────────────────────────
 
-STAGE_A_PROMPT_TEMPLATE = """You are a clinical data extraction assistant.
-Extract all medications from the following After Visit Summary (AVS) into a JSON array.
+PHANTOM_MED_BLOCKLIST = {
+    "signed", "signature", "sign", "provider", "physician",
+    "nurse", "attestation", "attested", "verified", "approved"
+}
 
-IMPORTANT RULES:
-- Output ONLY valid JSON. No prose, no markdown, no explanation.
-- Each item must have exactly these fields:
-    "name"       : first word only of the generic or brand name (e.g., "Furosemide" not "Furosemide 40 mg") (string)
-    "dose_mg"    : numeric dose in mg, or null if not a mg dose
-    "dose_raw"   : dose exactly as written (string)
-    "route"      : e.g. "PO", "IV" (string)
-    "frequency"  : e.g. "Once daily", "BID", "PRN" (string)
-    "indication" : what it is for (string)
-- If a field is not present in the document, use null.
-- Do NOT invent or infer any information not explicitly in the text.
-
-AFTER VISIT SUMMARY (AVS) TEXT:
-{avs_text}
-
-Respond with ONLY the JSON array.
-"""
-
-def stage_a_extract_home_meds(model_name: str, avs_text: str) -> list[dict] | None:
-    """
-    Stage A: Extract medications from the After Visit Summary (AVS) into JSON.
-    Input: raw text of the AVS
-    Returns: list of medication dicts, or None on failure
-    """
-    print("\n── Stage A: Extracting medications from AVS ──")
-
-    prompt = STAGE_A_PROMPT_TEMPLATE.replace("{avs_text}", avs_text)
-    raw = call_model(prompt, model_name)
-
-    result = parse_json_response(raw)
-    if result is not None:
-        print(f"  ✓ Extracted {len(result)} home medications")
-    return result
-
+def _is_valid_med(entry: dict) -> bool:
+    name = (entry.get("name") or "").strip().lower()
+    return bool(name) and name not in PHANTOM_MED_BLOCKLIST
 
 # ─────────────────────────────────────────────
 # STAGE A (image variant) — AVS is an image
@@ -152,6 +109,13 @@ IMPORTANT RULES:
         "frequency"  : e.g. "Once daily", "BID", "PRN" (string)
         "indication" : what it is for, or null if not listed (string)
 - Do NOT invent or infer any information not explicitly visible in the image.
+- If the entire page contains no medications (e.g. it is a signature page, attestation page,
+  provider sign-off, or contains only administrative text with no drug names), return an
+  empty array for "medications": []. NEVER output null for "medications" or "allergies" —
+  always use an empty array [] when there is nothing to list.
+- Ignore signature lines, provider names, attestation text, and all non-medication content.
+  Do NOT extract the word "Signed", "Signature", a provider's name, or any administrative
+  label as a medication entry.
 - If a field is not visible, use null.
 
 Respond with ONLY the JSON object.
@@ -169,56 +133,13 @@ def stage_a_extract_from_image(model_name: str, image) -> dict | None:
 
     result = parse_json_response(raw)
     if result is not None:
-        meds = result.get("medications", [])
-        allergies = result.get("allergies", [])
-        print(f"  ✓ Extracted {len(meds)} medications, {len(allergies)} allergies from image")
+        result["medications"] = [
+            m for m in (result.get("medications") or []) if _is_valid_med(m)
+        ]
+        result["allergies"] = result.get("allergies") or []
+        print(f"  ✓ Extracted {len(result['medications'])} medications, "
+              f"{len(result['allergies'])} allergies from image")
         print(json.dumps(result, indent=2))
-    return result
-
-
-# ─────────────────────────────────────────────
-# STAGE B — Extract MAR Medications
-# ─────────────────────────────────────────────
-
-STAGE_B_PROMPT_TEMPLATE = """You are a clinical data extraction assistant.
-Extract all medications from the following hospital MAR (Medication Administration Record)
-into a JSON object.
-
-IMPORTANT RULES:
-- Output ONLY valid JSON. No prose, no markdown, no explanation.
-- Produce two top-level keys:
-    "allergies_on_mar": array of strings (copy allergy section exactly, or ["NKDA"] if stated)
-    "medications": array of objects with fields:
-        "name"       : first word only of the generic or brand name (e.g., "Furosemide" not "Furosemide 40 mg") (string)
-        "dose_mg"    : numeric dose in mg, or null if not a mg dose
-        "dose_raw"   : dose exactly as written (string)
-        "route"      : e.g. "PO", "IV" (string)
-        "frequency"  : e.g. "Once daily", "BID", "PRN" (string)
-        "scheduled_times": array of strings e.g. ["0800", "2000"], or null
-- Do NOT invent or infer any information not explicitly in the text.
-- If a field is not present, use null.
-
-MAR TEXT:
-{mar_text}
-
-Respond with ONLY the JSON object.
-"""
-
-def stage_b_extract_mar(model_name: str, mar_text: str) -> dict | None:
-    """
-    Stage B: Extract MAR medications and allergy listing into JSON.
-    Input: raw text of the MAR
-    Returns: dict with 'allergies_on_mar' and 'medications' keys, or None on failure
-    """
-    print("\n── Stage B: Extracting MAR medications ──")
-
-    prompt = STAGE_B_PROMPT_TEMPLATE.replace("{mar_text}", mar_text)
-    raw = call_model(prompt, model_name)
-
-    result = parse_json_response(raw)
-    if result is not None:
-        meds = result.get("medications", [])
-        print(f"  ✓ Extracted {len(meds)} MAR medications")
     return result
 
 
@@ -250,6 +171,7 @@ IMPORTANT RULES:
         "frequency"  : e.g. "Once daily", "BID", "PRN" (string)
         "scheduled_times": array of strings e.g. ["0800", "2000"], or null
 - Do NOT invent or infer any information not explicitly visible in the image.
+- Ignore signature lines, provider names, and non-medication text.
 - If a field is not visible, use null.
 
 Respond with ONLY the JSON object.
@@ -351,74 +273,4 @@ def stage_c_compare(avs_data: dict, mar_data: dict) -> dict | None:
         f"{len(findings['incorrect_routes'])} route issue(s)"
     )
     return findings
-
-
-# ─────────────────────────────────────────────
-# MAIN — Wire all stages together
-# ─────────────────────────────────────────────
-
-def run_reconciliation(
-    model_name: str,
-    avs_text: str,
-    mar_text: str,
-    output_path: str = "reconciliation_report.json",
-) -> dict:
-    """
-    Run the full 3-stage reconciliation pipeline (text inputs) and save a JSON report.
-
-    Args:
-        model_name:  Model display name or ID (routed via model_adapter)
-        avs_text:    Raw text of the After Visit Summary (AVS)
-        mar_text:    Raw text of the hospital MAR
-        output_path: Where to save the final JSON report
-
-    Returns:
-        The final report as a dict
-    """
-    print("\n" + "=" * 55)
-    print("  MEDICATION RECONCILIATION PIPELINE")
-    print("=" * 55)
-
-    # Stage A — extract AVS medications from text
-    home_meds = stage_a_extract_home_meds(model_name, avs_text)
-    if not home_meds:
-        print("[ERROR] Stage A failed — could not extract AVS medications.")
-        return {}
-
-    # Stage B — extract MAR meds from text
-    mar_data = stage_b_extract_mar(model_name, mar_text)
-    if not mar_data:
-        print("[ERROR] Stage B failed — could not extract MAR medications.")
-        return {}
-
-    # Stage C — deterministic comparison (no LLM call)
-    avs_data = {"medications": home_meds}
-    findings = stage_c_compare(avs_data, mar_data)
-    if not findings:
-        print("[ERROR] Stage C failed — could not compare documents.")
-        return {}
-
-    # Assemble final report
-    final_report = {
-        "pipeline_stages": {
-            "stage_a_home_meds": home_meds,
-            "stage_b_mar_data":  mar_data,
-            "stage_c_findings":  findings,
-        }
-    }
-
-    with open(output_path, "w") as f:
-        json.dump(final_report, f, indent=2)
-    print(f"\n✓ Full report saved to: {output_path}")
-    print("=" * 55)
-
-    return final_report
-
-
-if __name__ == "__main__":
-    model = load_model()
-
-    print("\n" + "=" * 55)
-    print("  MEDICATION RECONCILIATION PIPELINE")
-    print("=" * 55)
 

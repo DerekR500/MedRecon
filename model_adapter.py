@@ -10,6 +10,7 @@ Supported backend:
 import io
 import os
 import base64
+import threading
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -25,6 +26,11 @@ _DISPLAY_TO_ID: dict[str, str] = {
 }
 
 
+class EmptyModelResponseError(RuntimeError):
+    """Raised when the UF Navigator API returns a response with no content
+    (empty completion, truncated stream, or malformed body). Retryable."""
+
+
 def call_model(prompt: str, model_name: str, image=None) -> str:
     """
     Call the selected model and return the raw text response.
@@ -35,7 +41,7 @@ def call_model(prompt: str, model_name: str, image=None) -> str:
         image:      Optional PIL Image for vision/multimodal calls.
 
     Returns:
-        Raw response string from the model.
+        Raw response string from the model. Guaranteed non-None.
     """
     model_id = _DISPLAY_TO_ID.get(model_name, model_name)
     return _call_uf_navigator(prompt, model_id, image)
@@ -43,17 +49,52 @@ def call_model(prompt: str, model_name: str, image=None) -> str:
 
 # ── Backend: UF Navigator (OpenAI-compatible REST API) ───────────────────────
 
+# Single shared client for the whole process. _call_uf_navigator runs up to
+# 8x concurrently (one thread per AVS/MAR page); constructing a new OpenAI
+# client per call leaked an HTTP connection pool each time, which is never
+# closed in a long-lived server process. The OpenAI client is thread-safe,
+# so one instance serves all threads.
+_client = None
+_client_lock = threading.Lock()
+
+
+def _get_client():
+    global _client
+    if _client is None:
+        with _client_lock:
+            if _client is None:
+                from openai import OpenAI
+
+                api_key = os.getenv("KEY_NAME")
+                if not api_key:
+                    raise ValueError(
+                        "KEY_NAME is not set. Add it to your .env file."
+                    )
+                _client = OpenAI(base_url=_UF_BASE_URL, api_key=api_key)
+    return _client
+
+
+def _extract_content(response) -> str:
+    """Pull the message text out of a chat completion, raising a clear error
+    instead of letting a None slip out and crash downstream with
+    "object of type 'NoneType' has no len()"."""
+    if not getattr(response, "choices", None):
+        raise EmptyModelResponseError(
+            "UF Navigator returned a response with no choices (malformed body)."
+        )
+    content = response.choices[0].message.content
+    if content is None or not content.strip():
+        raise EmptyModelResponseError(
+            "UF Navigator returned an empty completion for this page."
+        )
+    return content
+
+
 def _call_uf_navigator(prompt: str, model_id: str, image=None) -> str:
     import time
-    from openai import OpenAI, APIConnectionError, APITimeoutError
+    from openai import APIConnectionError, APITimeoutError
 
-    api_key = os.getenv("KEY_NAME")
-    if not api_key:
-        raise ValueError(
-            "KEY_NAME is not set. Add it to your .env file."
-        )
-
-    client = OpenAI(base_url=_UF_BASE_URL, api_key=api_key)
+    client = _get_client()
 
     if image is not None:
         b64 = base64.b64encode(_to_png_bytes(image)).decode("utf-8")
@@ -67,8 +108,9 @@ def _call_uf_navigator(prompt: str, model_id: str, image=None) -> str:
     else:
         content = prompt
 
-    # Retry once on transient network failures (connection/timeout) so a single
-    # blip on one page doesn't kill a whole multi-page reconciliation run.
+    # Retry once on transient failures -- connection/timeout errors AND empty
+    # completions -- so a single blip on one page doesn't kill a whole
+    # multi-page reconciliation run.
     # Auth/invalid-request errors are NOT retried -- they would fail identically
     # again. If the retry also fails, the exception propagates up so server.py's
     # evt("error", ...) handling still sees it.
@@ -81,8 +123,8 @@ def _call_uf_navigator(prompt: str, model_id: str, image=None) -> str:
                 model=model_id,
                 messages=[{"role": "user", "content": content}],
             )
-            return response.choices[0].message.content
-        except (APIConnectionError, APITimeoutError) as e:
+            return _extract_content(response)
+        except (APIConnectionError, APITimeoutError, EmptyModelResponseError) as e:
             if attempt == max_attempts:
                 raise
             print(f"[WARN] UF Navigator call failed ({e}), retrying once in {backoff_seconds}s...")

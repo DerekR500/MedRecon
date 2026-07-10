@@ -31,6 +31,28 @@ from main import (
 
 _MAX_IMAGE_WIDTH = 1400
 
+# Proxies in front of the deployed backend (e.g. Render's) drop connections
+# that go silent for too long, and Stage A/B/C can run for minutes without
+# emitting an event. Sending an SSE comment line this often keeps the
+# connection alive; browsers and the frontend parser both ignore comments.
+_HEARTBEAT_SECONDS = 15
+
+
+async def _heartbeat_while(task: "asyncio.Task"):
+    """Yield SSE keep-alive comments every _HEARTBEAT_SECONDS until `task`
+    finishes. The caller retrieves the task's result afterwards. If the client
+    disconnects mid-wait (this generator gets closed), the task is cancelled
+    so abandoned pipeline work doesn't keep running."""
+    try:
+        while not task.done():
+            done, _ = await asyncio.wait({task}, timeout=_HEARTBEAT_SECONDS)
+            if not done:
+                yield ": keep-alive\n\n"
+    finally:
+        if not task.done():
+            task.cancel()
+
+
 app = FastAPI(title="MedRecon API")
 
 app.add_middleware(
@@ -90,11 +112,14 @@ async def reconcile(
 
         # ── Load all AVS + MAR pages concurrently ──
         yield evt("log", {"msg": f"── Loading {len(avs_file)} AVS + {len(mar_file)} MAR page(s) ──"})
-        loaded = await asyncio.gather(
+        load_task = asyncio.ensure_future(asyncio.gather(
             *(_upload_to_image(u) for u in avs_file),
             *(_upload_to_image(u) for u in mar_file),
             return_exceptions=True,
-        )
+        ))
+        async for ping in _heartbeat_while(load_task):
+            yield ping
+        loaded = load_task.result()
         avs_imgs = loaded[: len(avs_file)]
         mar_imgs = loaded[len(avs_file):]
         for i, img in enumerate(avs_imgs):
@@ -113,7 +138,12 @@ async def reconcile(
         a_tasks = [asyncio.to_thread(stage_a_extract_from_image, model, img) for img in avs_imgs]
         b_tasks = [asyncio.to_thread(stage_b_extract_mar_from_image, model, img) for img in mar_imgs]
 
-        results   = await asyncio.gather(*a_tasks, *b_tasks, return_exceptions=True)
+        extract_task = asyncio.ensure_future(
+            asyncio.gather(*a_tasks, *b_tasks, return_exceptions=True)
+        )
+        async for ping in _heartbeat_while(extract_task):
+            yield ping
+        results   = extract_task.result()
         a_results = results[: len(a_tasks)]
         b_results = results[len(a_tasks):]
 
@@ -157,8 +187,11 @@ async def reconcile(
 
         # Stage C
         yield evt("log", {"msg": "── Stage C: Deterministic matching (RxNorm/RxClass) ──"})
+        c_task = asyncio.ensure_future(asyncio.to_thread(stage_c_compare, home_data, mar_data))
+        async for ping in _heartbeat_while(c_task):
+            yield ping
         try:
-            findings = await asyncio.to_thread(stage_c_compare, home_data, mar_data)
+            findings = c_task.result()
         except Exception as e:
             yield evt("error", {"msg": f"Stage C error: {e}"})
             return
@@ -285,7 +318,10 @@ async def reconcile_batch(
         done = 0
         try:
             for _ in range(n):
-                kind, cid, payload = await queue.get()
+                get_task = asyncio.ensure_future(queue.get())
+                async for ping in _heartbeat_while(get_task):
+                    yield ping
+                kind, cid, payload = get_task.result()
                 if kind == "error":
                     yield evt("error", {"case_id": cid, "msg": f"Case {cid} failed: {payload}"})
                     return  # stop the whole batch on the first failure

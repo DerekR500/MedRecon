@@ -813,8 +813,11 @@
   </main>
 
   <script>
-    // ← Swap this for your production backend URL before deploying
-    const API_BASE = 'https://medrecon.onrender.com';
+    // Same-origin ('') when the page is served by the local uvicorn backend;
+    // absolute Render URL when served from anywhere else (e.g. Vercel).
+    const API_BASE = ['localhost', '127.0.0.1'].includes(location.hostname)
+      ? ''
+      : 'https://medrecon.onrender.com';
 
     let rowData = [];
     let abortController = null;   // tracks the in-flight reconciliation (single OR batch)
