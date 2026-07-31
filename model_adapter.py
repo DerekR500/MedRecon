@@ -17,12 +17,24 @@ load_dotenv()
 
 _UF_BASE_URL = "https://api.ai.it.ufl.edu/v1"
 
+# Generation is greedy and reproducible: temperature 0 plus a fixed seed
+# (verified honored by the UF Navigator endpoint: same seed reproduces
+# byte-identical output at temperature=1, different seed differs).
+_GENERATION_SEED = 0
+
+# Completion cap. Sized from real extraction output: one pretty-printed
+# medication record in our JSON schema is ~222 chars (~74 tokens at a
+# conservative 3 chars/token). A worst-case legitimate dense MAR page of
+# 30 records + allergies + markdown fences is ~8.2k chars (~2.7k tokens
+# conservative). 4096 gives ~1.5x headroom (~55 records) while still
+# bounding degenerate repetition loops. If a response hits this cap,
+# finish_reason == "length" and a [WARN][TRUNCATED] line is emitted.
+_MAX_COMPLETION_TOKENS = 4096
+
 # Maps dropdown display names → internal API model IDs
 _DISPLAY_TO_ID: dict[str, str] = {
-    "medgemma-27b-it (UF Navigator)":        "medgemma-27b-it",
-    "gemma-3-27b-it (UF Navigator)":         "gemma-3-27b-it",
-    "mistral-small-3.1 (UF Navigator)":      "mistral-small-3.1",
-    "granite-3.3-8b-instruct (UF Navigator)":"granite-3.3-8b-instruct",
+    "gemma-3-27b-it (UF Navigator)":    "gemma-3-27b-it",
+    "mistral-small-3.1 (UF Navigator)": "mistral-small-3.1",
 }
 
 
@@ -122,7 +134,16 @@ def _call_uf_navigator(prompt: str, model_id: str, image=None) -> str:
             response = client.chat.completions.create(
                 model=model_id,
                 messages=[{"role": "user", "content": content}],
+                temperature=0,
+                max_tokens=_MAX_COMPLETION_TOKENS,
+                seed=_GENERATION_SEED,
             )
+            finish_reason = (response.choices[0].finish_reason
+                             if getattr(response, "choices", None) else None)
+            print(f"[MODEL] {model_id} finish_reason={finish_reason}")
+            if finish_reason == "length":
+                print("[WARN][TRUNCATED] finish_reason=length - response hit "
+                      "max_tokens, extracted list is INCOMPLETE")
             return _extract_content(response)
         except (APIConnectionError, APITimeoutError, EmptyModelResponseError) as e:
             if attempt == max_attempts:

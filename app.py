@@ -50,10 +50,8 @@ def _combine_images(file_list) -> Image.Image | None:
 
 
 MODEL_CHOICES = [
-    "medgemma-27b-it (UF Navigator)",
     "gemma-3-27b-it (UF Navigator)",
     "mistral-small-3.1 (UF Navigator)",
-    "granite-3.3-8b-instruct (UF Navigator)",
 ]
 
 _STAGE_C_COLUMNS = ["Omissions", "Duplications", "Dosage Discrepancies", "Incorrect Routes"]

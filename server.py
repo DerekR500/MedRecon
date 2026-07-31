@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
 from main import (
+    OMISSION_RATIO_WARN_THRESHOLD,
     stage_a_extract_from_image,
     stage_b_extract_mar_from_image,
     stage_c_compare,
@@ -198,6 +199,17 @@ async def reconcile(
         if not findings:
             yield evt("error", {"msg": "Stage C failed — could not compare documents."})
             return
+
+        # Omissions are MAR-side (inpatient meds not carried to discharge), so
+        # the ratio is measured against the MAR total. len(mar_meds) here is the
+        # raw pre-clean count, so this UI warning is a coarse approximation of
+        # the precise [WARN][OMISSION-RATIO] line stage_c_compare logs to stdout.
+        n_omissions = len(findings.get("omissions") or [])
+        if mar_meds and n_omissions > OMISSION_RATIO_WARN_THRESHOLD * len(mar_meds):
+            yield evt("log", {"msg": (
+                f"[WARN][OMISSION-RATIO] {n_omissions}/{len(mar_meds)} "
+                f"({round(100 * n_omissions / len(mar_meds))}%) of MAR meds not carried to "
+                "discharge AVS — check AVS extraction before trusting this result")})
 
         yield evt("log", {"msg": "  ✓ Comparison complete\n\nPipeline complete."})
         yield evt("result", {"findings": findings})
